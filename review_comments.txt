@@ -1,0 +1,107 @@
+Customer requirement C code(Diver related as mentioned above): 
+
+-------------------------------------------------------------------------------------------------------------------
+
+7: Break the line into two to avoid lines longer than 85 characters
+
+-------------------------------------------------------------------------------------------------------------------
+
+8: Replaced EEPROM_H with _eeprom_h_
+
+If EEPROM_H is encountered in code: Replace it with _eeprom_h_
+
+-------------------------------------------------------------------------------------------------------------------
+
+10: We use 4 empty lines between routines
+
+4 blank lines between two blocks in the code
+
+-------------------------------------------------------------------------------------------------------------------
+
+12: Changed 0xFFFF to 0xffff (we use lower-case constants)
+
+// Before
+unsigned int maxVal = 0xFFFF;
+
+// After
+unsigned int maxVal = 0xffff;
+
+-------------------------------------------------------------------------------------------------------------------
+
+15: Added EXPORT "qualifier". Each function should have a "qualifier" (either EXPORT or LOCAL)
+
+-------------------------------------------------------------------------------------------------------------------
+
+16: Changed to using K&R-syle braces
+
+if (condition) {
+    // code
+} else {
+    // code
+}
+
+-------------------------------------------------------------------------------------------------------------------
+
+19: Changed nBytes <= 0 to !nBytes , Note: An unsigned variable cannot be < 0
+
+unsigned int nBytes = 0 or greater 
+// More info on nBytes required, is this the only expected Variable name to be verified?
+
+-------------------------------------------------------------------------------------------------------------------
+
+20: Changed %d to %u when prnting nBytes
+
+#include <stdio.h>
+
+int main() {
+  unsigned int nBytes = 255; // Unsigned by definition
+  printf("nBytes using %%d: %d\n", nBytes); // Wrong Usage
+  printf("nBytes using %%u: %u\n", nBytes); // Expected Usage
+  return 0;
+}
+
+Output:
+nBytes using %d: 255
+nBytes using %u: 255
+
+-------------------------------------------------------------------------------------------------------------------
+
+21:Using %x format for printing addr
+
+#include <stdio.h>
+#include <stdint.h>
+
+int main() {
+    int var = 10;
+    printf("Address of var using %%x: %x\n", (unsigned long long)&var);
+    printf("Address of var using %%x: %x\n", (uintptr_t)&var);
+    return 0;
+}
+
+Output:
+Address of var using %x: 7ffeb991ba7c
+Address of var using %x: 7ffeb991ba7c
+
+-------------------------------------------------------------------------------------------------------------------
+
+33. Moved ops declaration to the top of the function. Eliminated auto aggregate initialization.
+
+All variables must be declared at the beginning irrespective of it being a global or local variable.
+should the initialiation be done here as well?
+
+int var = 10;  // Declare 'var' and initialize it with the value 10
+
+ or
+
+int var;  // Declare 'var'
+var = 10;  // Initialize 'var' with the value 10
+
+
+-------------------------------------------------------------------------------------------------------------------
+
+39: Changed double-slash comments to C89-style comments
+
+Instead of // to be used in Comments Section:
+Customer requirement: Delimited by /* and */
+
+-------------------------------------------------------------------------------------------------------------------
