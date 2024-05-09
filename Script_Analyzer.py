@@ -319,7 +319,7 @@ class ScriptAnalyzer:
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
-            logging.error(f"Error during line length limit check: {str(e)}")
+                logging.error(f"Error during line length limit check: {str(e)}")
 
     def check_variable_declaration(self):
         global_variable_declaration = False
@@ -327,11 +327,7 @@ class ScriptAnalyzer:
         in_typedef_struct_block = False
         in_local_struct_block = False
         block_open_count = 0
-        function_pattern = re.compile(r'\w+\s+\w+\(.*\)\s*{?$')
-        function_declaration_pattern = re.compile(r'\w+\s+\w+\(.*\)\s*;?$')
-        function_definition_pattern = re.compile(r'\w+\s+\w+\(.*\)\s*{?$')
-        # Add a new pattern for your company's standard function definition syntax
-        company_function_pattern = re.compile(r'(EXPORT|LOCAL)?\s*\w+\s*\w+\(.*\)\s*{?$')
+        function_pattern = re.compile(r'\s*(EXPORT\s+|LOCAL\s+|STATIC\s+)?\w+\s+\w+\s*\([^)]*\)\s*{?$')
         in_function_declaration = False
 
         try:
@@ -364,7 +360,18 @@ class ScriptAnalyzer:
                     if in_local_struct_block and block_open_count == 0:
                         in_local_struct_block = False
 
-                    if function_pattern.match(line) or function_declaration_pattern.match(line) or function_definition_pattern.match(line) or company_function_pattern.match(line):
+                    if "(" in line or ")" in line:
+                        continue  # Skip lines containing "(" or ")" to avoid function and argument checks
+
+                    if "=" in line and not any(line.strip().startswith(data_type) for data_type in RESERVED_TYPES):
+                        if line.strip().endswith(";") and len(line.split("=")) > 1:
+                            var_name = line.split("=")[0].strip().split()[-1]
+                            if not any(line.strip().startswith(var_name) for line in script_file):
+                                logging.warning(f"Variable must be declared before initialization: Line {line_number} '{line.strip()}'")
+                                self.counts['variable_declarations_check'] += 1
+                        continue
+
+                    if function_pattern.match(line):
                         in_function_declaration = True
                         continue  # Skip function declaration or definition lines
 
@@ -376,7 +383,8 @@ class ScriptAnalyzer:
 
                     if "}" in line:
                         block_open_count -= 1
-                        in_function_declaration = False
+                        if block_open_count == 0:
+                            in_function_declaration = False
 
             logging.info(f"Variable Declaration Check completed - Error Count: {self.counts['variable_declarations_check']}")
 
