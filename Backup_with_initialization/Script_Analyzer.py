@@ -152,6 +152,12 @@ class ScriptAnalyzer:
                     logging.error(f"Variable Declaration check: {str(e)}")
                 
                 try:
+                    # Check script indentation
+                    self.check_variable_initialization()
+                except Exception as e:
+                    logging.error(f"Variable Initialization check: {str(e)}")
+
+                try:
                     # Check naming convention
                     self.check_naming_conventions()
                 except Exception as e:
@@ -816,7 +822,7 @@ def send_email(sender_email, sender_password, recipient_email, attachment_path, 
         'line_length_limit_check': 'Character Count Check',
         'brace_placement_check': 'Brace Placement Check',
         'variable_declarations_check': 'Variable Declaration Check',
-        # 'variable_initialization_check': 'Variable Initialization Check',
+        'variable_initialization_check': 'Variable Initialization Check',
         'spacing_between_routines_check': 'Line Spacing Check Functions',
         'hex_value_check': 'Hex Value Check',
         'comment_check': 'Comment Convention Check',
