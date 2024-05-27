@@ -643,44 +643,34 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
-            # Check for consistent use of tabs or spaces for indentation
-            indentation_type = None
-            for line_number, line in enumerate(lines, start=1):
-                try:
-                    leading_whitespace = len(line) - len(line.lstrip())
-                    if leading_whitespace < len(line):
-                        if line[leading_whitespace] == '\t':
-                            if indentation_type is None:
-                                indentation_type = 'tabs'
-                            elif indentation_type != 'tabs':
-                                logging.warning(f"Inconsistent use of tabs and spaces for indentation at line {line_number}")
-                                self.counts['consistency_check'] += 1
-                        else:
-                            if indentation_type is None:
-                                indentation_type = 'spaces'
-                            elif indentation_type != 'spaces':
-                                logging.warning(f"Inconsistent use of tabs and spaces for indentation at line {line_number}")
-                                self.counts['consistency_check'] += 1
-                except IndexError as ie:
-                    logging.error(f"IndexError at line {line_number}: {line} - {str(ie)}")
-                    self.counts['consistency_check'] += 1
-
             # Check for consistent line endings (CRLF or LF)
             line_endings = set()
             for line_number, line in enumerate(lines, start=1):
-                if '\r\n' in line:
-                    line_endings.add('CRLF')
-                elif '\n' in line:
-                    line_endings.add('LF')
+                try:
+                    if '\r\n' in line:
+                        line_endings.add('CRLF')
+                    elif '\n' in line:
+                        line_endings.add('LF')
+                except IndexError as ie:
+                    logging.error(f"IndexError at line {line_number}: {line.strip()} - {str(ie)}")
+                    self.counts['consistency_check'] += 1
+                except ValueError as ve:
+                    logging.error(f"ValueError at line {line_number}: {line.strip()} - {str(ve)}")
+                    self.counts['consistency_check'] += 1
+                except Exception as e:
+                    logging.error(f"Unexpected error at line {line_number}: {line.strip()} - {str(e)}")
+                    self.counts['consistency_check'] += 1
 
             if len(line_endings) > 1:
-                logging.warning('Inconsistent line endings found in the script. Use either CRLF(line break "\r\n") or LF(line break "\n"), not both.')
+                logging.warning('Inconsistent line endings found in the script. Use either CRLF (line break "\r\n") or LF (line break "\n"), not both.')
                 self.counts['consistency_check'] += 1
 
             logging.info(f"Consistency check completed - Error Count: {self.counts['consistency_check']}")
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
+        except IOError as ioe:
+            logging.error(f"I/O error occurred: {str(ioe)}")
         except Exception as e:
             logging.error(f"Error during consistency check: {str(e)}")
 
