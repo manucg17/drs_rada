@@ -4,6 +4,7 @@ import socket
 import logging
 import subprocess
 import smtplib
+from typing import Dict
 from pathlib import Path
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
@@ -20,6 +21,8 @@ SMTP_PORT = 587
 SEQUENCE_LENGTH = 3  # Minimum number of lines in a sequence to consider it for refactoring
 REPETITION_THRESHOLD = 3  # Determine the threshold for suggesting refactoring as a function
 ALLOWED_CHAR_COUNT = 85
+OPERATORS = ['->', '<<', '>>', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '&=', '|=', '^=', '+', '-', '*', '/', '%', '=', '<', '>', '&', '|', ',', '?']
+FORMAT_SPECIFIERS = ["%c", "%d", "%e", "%E", "%f", "%g", "%G", "%i", "%ld", "%li", "%lf", "%Lf", "%lu", "%lli", "%lld", "%llu", "%o", "%p", "%s", "%u", "%x", "%X", "%n", "%%"]
 EXPORT_FUNCTIONS = ["STATUS hmc7043IfInit(", "STATUS hmc7043InitDev(", 
                     "STATUS hmc7043OutChEnDis(", "STATUS hmc7043ChDoSlip(",
                     "STATUS hmc7043SetSysrefMode(", "STATUS hmc7043SysrefSwPulseN(",
@@ -42,14 +45,9 @@ RESERVED_TYPES = [
     'UTL_FFIND_OPTS', 'HUTL_MUTEX', 'HUTL_QUEUE', 'UTL_Q_STAT', 'Utl_ffind_impl', 'INT8', 'UINT8', 
     'INT16', 'UINT16', 'INT32', 'UINT32', 'INT64', 'UINT64', 'INT128', 'UINT128', 'ULONG', 'UINT4PTR', 
     'PHYSICAL_ADDRESS', 'REAL32', 'REAL64', 'Bool', 'UINT8_Bool', 'STATUS', 'UINT32_ATOMIC', 
-    'UINT64_ATOMIC'
+    'UINT64_ATOMIC', 'DS7505_DEV_MASK', 'const char'
 ]
 UI_VARIABLES = ['unsigned', 'UINT8', 'UINT32', 'UINT64', 'HMC7043_REG', 'HMC7043_PRD_ID', 'CKDST_DEV', 'CKDST_DEV_MASK', 'CKDST_FREQ_HZ']
-
-ITERATION_VALUES = {
-    'MAX_FUNCTION_COUNT': 3,  # Maximum number of functions expected in the script
-    'MAX_SUBROUTINE_COUNT': 3  # Maximum number of subroutines expected in the script
-}
 
 class ScriptAnalyzer:
     def __init__(self, script_path, recipient_email, encrypted_sender_email, encrypted_sender_password, encryption_key):
@@ -59,21 +57,24 @@ class ScriptAnalyzer:
         self.sender_password = decrypt_data(encrypted_sender_password, encryption_key).decode()
         self.log_file = self.get_log_file_name()
         self.encryption_key = encryption_key
+        self.global_declarations = []
+        self.RESERVED_TYPES = RESERVED_TYPES
         self.counts = {
             'line_length_limit_check': 0,
-            'naming_conventions_check': 0,
+            'excess_whitespace_check': 0,
+            'operator_spacing_check': 0,
+            'pointer_naming_check': 0,
             'address_print_check': 0,
-			'replace_name_check': 0,
             'unsigned_print_check': 0,
+            'naming_conventions_check': 0,
             'unsigned_logic_check': 0,
+			'replace_name_check': 0,
             'variable_declarations_check': 0,
-            'variable_initialization_check': 0,
             'spacing_between_routines_check': 0,
             'hex_value_check': 0,
 			'brace_placement_check': 0,
             'comment_check': 0,
             'consistency_check': 0,
-            'excess_whitespace_check': 0,
         }
         logging.basicConfig(filename=self.log_file, level=logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
@@ -92,6 +93,7 @@ class ScriptAnalyzer:
         logger.addFilter(filter_out_http_requests)         
         # Initialize error count
         self.error_count = 0
+        self.pointer_error_count = 0
 
     def get_log_file_name(self):
         current_datetime = datetime.now().strftime("%H-%M-%S-on-%d-%m-%Y")
@@ -130,9 +132,15 @@ class ScriptAnalyzer:
                     logging.error(f"Error in Comment convention check: {str(e)}")
                                             
             elif file_extension == ".c":
-                # Check for mandatory #include directive
-                self.check_include_directive()
+                # # Check for mandatory #include directive
+                # self.check_include_directive()
                         
+                try:
+                    # Extract Global Variables and Datatypes
+                    self.extract_global_declarations()
+                except Exception as e:
+                    logging.error(f"Error during Globally declared Datatypes and Variables in line: {str(e)}")
+        
                 try:
                     # Check number of characters in each line
                     self.check_line_length_limit()
@@ -146,29 +154,29 @@ class ScriptAnalyzer:
                     logging.error(f"Error during Brace Placement Check for Control Statements: {str(e)}")
                 
                 try:
-                    # Check script indentation
+                    # Check Script Indentation
                     self.check_variable_declaration()
                 except Exception as e:
                     logging.error(f"Variable Declaration check: {str(e)}")
                 
                 try:
-                    # Check naming convention
+                    # Check Naming Convention
                     self.check_naming_conventions()
                 except Exception as e:
                     logging.error(f"Error during naming convention check: {str(e)}")
                     
                 try:
-                    # Check spacing betwen functions convention
+                    # Check Line Spacing betwen Functions
                     self.check_spacing_between_routines()
                 except Exception as e:
                     logging.error(f"Error Line spacing check between Routines: {str(e)}")
-            
+
                 try:
-                    # Check hex value convention
+                    # Check Hex Value Convention
                     self.check_hex_values()
                 except Exception as e:
                     logging.error(f"Error during Hex Value convention check: {str(e)}")
-                            
+
                 try:
                     # Check Comment Lines
                     self.check_comments()
@@ -176,13 +184,13 @@ class ScriptAnalyzer:
                     logging.error(f"Error in Comment convention check: {str(e)}")
 
                 try:
-                    # Check consistency
+                    # Check Consistency
                     self.check_consistency()
                 except Exception as e:
-                    logging.error(f"Error during consistency check: {str(e)}")
+                    logging.error(f"Error during Consistency Check: {str(e)}")
 
                 try:
-                    # Check whitespace usage
+                    # Check Whitespace Usage
                     self.check_excess_whitespace()
                 except Exception as e:
                     logging.error(f"Error during whitespace check: {str(e)}")
@@ -190,6 +198,12 @@ class ScriptAnalyzer:
                 try:
                     # Check Unsigned Variable Print Format
                     self.check_unsigned_variables()
+                except Exception as e:
+                    logging.error(f"Error during Unsigned Variable Print Format check: {str(e)}")
+
+                try:
+                    # Check Operator Spacing Format Check
+                    self.check_operator_spacing()
                 except Exception as e:
                     logging.error(f"Error during Unsigned Variable Print Format check: {str(e)}")
 
@@ -235,7 +249,7 @@ class ScriptAnalyzer:
             summary += "\n    Summary of Issues observed:\n"
             summary += "-----------------------------------\n"
             summary += "\tCheck\t\t\t\t\t Count\n"
-            summary += "-----------------------------------\n"                
+            summary += "-----------------------------------\n"
             
             for check, count in self.counts.items():
                 if count >= 1:
@@ -250,53 +264,107 @@ class ScriptAnalyzer:
         with open(self.log_file, 'a') as log_file:
             log_file.write(summary)
 
+    def extract_global_declarations(self):
+        # Patterns for various global declarations
+        patterns = [
+            re.compile(r'typedef\s+struct\s+(\w+)'),
+            re.compile(r'LOCAL\s+struct\s+(\w+)'),
+            re.compile(r'typedef\s+enum\s+(\w+)'),
+            re.compile(r'typedef\s+union\s+(\w+)'),
+            re.compile(r'static\s+(\w+)'),
+            re.compile(r'extern\s+(\w+)')
+        ]
+
+        # Pattern for function declarations
+        func_pattern = re.compile(r'\((.*?)\)')
+
+        try:
+            with open(self.script_path, "r") as script_file:
+                lines = script_file.readlines()
+
+            for line in lines:
+                for pattern in patterns:
+                    match = pattern.search(line)
+                    if match:
+                        type_name = match.group(1)
+                        if type_name not in self.RESERVED_TYPES:
+                            self.RESERVED_TYPES.append(type_name)  # Add new type to RESERVED_TYPES
+                            logging.info(f"Added new reserved type: {type_name}")
+                        return type_name
+
+                # Check for function declarations
+                match = func_pattern.search(line)
+                if match:
+                    params = match.group(1).split(',')
+                    for param in params:
+                        type_name = param.split()[0]  # Get the type from the parameter declaration
+                        if type_name not in self.RESERVED_TYPES:
+                            self.RESERVED_TYPES.append(type_name)  # Add new type to RESERVED_TYPES
+                            logging.info(f"Added new reserved type from function parameter: {type_name}")
+
+            logging.info("Global declaration extraction completed")
+
+        except FileNotFoundError:
+            logging.error(f"File not found: {self.script_path}")
+        except Exception as e:
+            logging.error(f"Error during global declaration extraction: {str(e)}")
+
+        return None
+    
     def check_include_directive(self):
         try:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
-                first_non_comment_line = None
-                in_multiline_comment = False
-                for line_number, line in enumerate(lines, start=1):
-                    stripped_line = line.strip()
-                    if not stripped_line:
-                        continue
-                    if stripped_line.startswith("/*"):
-                        in_multiline_comment = True
-                    if in_multiline_comment:
-                        if "*/" in stripped_line:
-                            in_multiline_comment = False
-                        continue
-                    if stripped_line.startswith("//"):
-                        continue
-                    first_non_comment_line = line_number
-                    break
+            in_multiline_comment = False
+            include_directive_found = False
+            code_found = False
+            for line_number, line in enumerate(lines, start=1):
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
+                if "/*" in stripped_line:
+                    in_multiline_comment = True
+                if in_multiline_comment:
+                    if "*/" in stripped_line:
+                        in_multiline_comment = False
+                    continue
+                if stripped_line.startswith("//"):
+                    continue
+                if stripped_line.startswith("#include "):
+                    if code_found:
+                        logging.error(f"Include Directive: '#include ' directive found after code at line {line_number}.")
+                        self.counts['include_directive_check'] += 1  # Increment the count
+                    else:
+                        include_directive_found = True
+                else:
+                    code_found = True
 
-                if not first_non_comment_line or not lines[first_non_comment_line - 1].strip().startswith("#include "):
-                    logging.error("Mandatory '#include ' directive missing at the beginning of the file.")
-                    self.counts['include_directive_check'] = 1  # Increment the count
-                
-            logging.info(f"INCLUDE directive check completed - Error Count: {self.counts['include_directive_check']}")
+            if not include_directive_found:
+                logging.error("Include Directive: Mandatory '#include ' directive missing at the beginning of the file.")
+                self.counts['include_directive_check'] += 1  # Increment the count
+
+            logging.info(f"Include Directive: Check completed - Error Count: {self.counts['include_directive_check']}")
 
         except FileNotFoundError:
-            logging.error(f"File not found: {self.script_path}")
+            logging.error(f"Exception Error: File not found: {self.script_path}")
         except Exception as e:
-            logging.error(f"Error during include directive check: {str(e)}")
+            logging.error(f"Exception Error: Issues during include directive check: {str(e)}")
 
     def check_name_replace(self):
         try:
             with open(self.script_path, "r") as script_file:
                 for line_number, line in enumerate(script_file, start=1):
                     if "EEPROM_H" in line:
-                        logging.warning(f"Found EEPROM_H on line {line_number}. Please Replace it with _eeprom_h_.")
+                        logging.info(f"Naming convention: Found EEPROM_H on line {line_number}. Please Replace it with _eeprom_h_.")
                         self.counts['replace_name_check'] += 1
 
-            logging.info(f"Name convention check completed - Count: {self.counts['replace_name_check']}")
+            logging.info(f"Naming convention: Check completed - Count: {self.counts['replace_name_check']}")
 
         except FileNotFoundError:
-            logging.error(f"File not found: {self.script_path}")
+            logging.error(f"Exception Error: File not found: {self.script_path}")
         except Exception as e:
-            logging.error(f"Error during Name Convention check: {str(e)}")
+            logging.error(f"Exception Error: Issues during Name Convention check: {str(e)}")
 
     def check_line_length_limit(self):
         try:
@@ -304,16 +372,32 @@ class ScriptAnalyzer:
                 lines = script_file.readlines()
 
             for line_number, line in enumerate(lines, start=1):
-                if len(line) > ALLOWED_CHAR_COUNT:
-                    logging.warning(f"Line length limit exceeded: Line {line_number} has {len(line)} characters: Exceeds limit of {ALLOWED_CHAR_COUNT} characters.")
+                line_length = len(line)
+                if line_length > ALLOWED_CHAR_COUNT:
+                    logging.info(f"Line Length Limit: Exceeded {ALLOWED_CHAR_COUNT} Characters: Line {line_number} has {line_length} characters.")
                     self.counts['line_length_limit_check'] += 1
+
+                    # Word or symbol containing the 85th Character
+                    char_at_85 = line[ALLOWED_CHAR_COUNT - 1]
+                    words = line.split()
+                    word_with_85th_char = next((word for word in words if char_at_85 in word), None)
+                    if word_with_85th_char:
+                        logging.info(f"Line {line_number}: The word containing the 85th character '{char_at_85}' is '{word_with_85th_char}'")
+
+                    # Last non-space/non-tab word in the line
+                    stripped_line = line.rstrip()
+                    last_word = stripped_line.split()[-1] if stripped_line else None
+                    if last_word:
+                        # Position of the last non-space/non-tab character of the last word
+                        last_char_position = stripped_line.rfind(last_word[-1]) + 1
+                        logging.info(f"Line {line_number}: The last non-space/non-tab word is '{last_word}' and the position of the last character '{last_word[-1]}' is {last_char_position}")
 
             logging.info(f"Line length limit check completed - Error Count: {self.counts['line_length_limit_check']}")
 
         except FileNotFoundError:
-            logging.error(f"File not found: {self.script_path}")
+            logging.error(f"Exception Error: File not found: {self.script_path}")
         except Exception as e:
-                logging.error(f"Error during line length limit check: {str(e)}")
+            logging.error(f"Exception Error: Issues during line length limit check: {str(e)}")
 
     def check_variable_declaration(self):
         global_variable_declaration = False
@@ -361,7 +445,7 @@ class ScriptAnalyzer:
                         if line.strip().endswith(";") and len(line.split("=")) > 1:
                             var_name = line.split("=")[0].strip().split()[-1]
                             if not any(line.strip().startswith(var_name) for line in script_file):
-                                logging.warning(f"Variable must be declared before initialization: Line {line_number} '{line.strip()}'")
+                                logging.info(f"Variable Declaration: must be done before initialization: Line {line_number} '{line.strip()}'")
                                 self.counts['variable_declarations_check'] += 1
                         continue
 
@@ -372,7 +456,7 @@ class ScriptAnalyzer:
                     if not global_variable_declaration and not in_control_data_block and not in_typedef_struct_block and not in_local_struct_block and not in_function_declaration:
                         if any(line.strip().startswith(data_type) for data_type in RESERVED_TYPES):
                             if not line.endswith(";"):
-                                logging.warning(f"Local variable declaration should be at the beginning of the block: Line {line_number} '{line.strip()}'")
+                                logging.info(f"Variable Declaration: Declaration needs to be at the beginning of the block: Line {line_number} '{line.strip()}'")
                                 self.counts['variable_declarations_check'] += 1
 
                     if "}" in line:
@@ -380,7 +464,7 @@ class ScriptAnalyzer:
                         if block_open_count == 0:
                             in_function_declaration = False
 
-            logging.info(f"Variable Declaration Check completed - Error Count: {self.counts['variable_declarations_check']}")
+            logging.info(f"Variable Declaration: Check completed - Error Count: {self.counts['variable_declarations_check']}")
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
@@ -409,10 +493,10 @@ class ScriptAnalyzer:
                         if any(line.strip().startswith(data_type) for data_type in RESERVED_TYPES):
                             if not function_pattern.match(line):
                                 if "=" in line:
-                                    logging.warning(f"Avoid initializing variables at declaration: Line {line_number} '{line.strip()}'")
+                                    logging.info(f"Variable Initialization: Avoid initializing variables at declaration: Line {line_number} '{line.strip()}'")
                                     self.counts['variable_initialization_check'] += 1
 
-            logging.info(f"Variable Initialization Check completed - Error Count: {self.counts['variable_initialization_check']}")
+            logging.info(f"Variable Initialization: Check completed - Error Count: {self.counts['variable_initialization_check']}")
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
@@ -421,7 +505,6 @@ class ScriptAnalyzer:
 
     def check_spacing_between_routines(self):
         empty_lines_count = 0
-        found_main = False
         comment_block = False
 
         try:
@@ -448,21 +531,18 @@ class ScriptAnalyzer:
                         break
 
                     if not comment_block and empty_lines_count == 4 and line.startswith('* - name:'):
-                        logging.warning(f"Expected 4 empty lines before '{line}' at line {line_number}.")
+                        logging.info(f"Expected 4 empty lines before '{line}' at line {line_number}.")
                         self.counts['spacing_between_routines_check'] += 1
                         empty_lines_count = 0
                         continue
 
                     if not comment_block and empty_lines_count == 4 and line.endswith('}'):
-                        logging.warning(f"Expected 4 empty lines after function block at line {line_number}.")
+                        logging.info(f"Expected 4 empty lines after function block at line {line_number}.")
                         self.counts['spacing_between_routines_check'] += 1
                         empty_lines_count = 0
                         continue
 
                     empty_lines_count = 0
-
-            if not found_main:
-                logging.warning("No 'int main()' function found in the script.")
 
             logging.info(f"Spacing between routines check completed - Error Count: {self.counts['spacing_between_routines_check']}")
 
@@ -476,89 +556,96 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
-                control_structure_stack = []
-                control_structures = ["if", "else if", "else", "switch", "for", "while", "do", "case", "default"]
-                function_patterns = ["EXPORT STATUS", "LOCAL STATUS"]
-                in_multiline_comment = False
+            control_structure_stack = []
+            control_structures = ["if", "else if", "else", "switch", "for", "while", "do", "case", "default"]
+            function_patterns = ["EXPORT STATUS", "LOCAL STATUS"]
+            in_multiline_comment = False
 
-                for line_number, line in enumerate(lines, start=1):
-                    stripped_line = line.strip()
-                    if not stripped_line:
-                        continue
+            for line_number, line in enumerate(lines, start=1):
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
 
-                    # Eliminate multiline comments
-                    if "/*" in stripped_line:
-                        in_multiline_comment = True
-                    if in_multiline_comment:
-                        if "*/" in stripped_line:
-                            in_multiline_comment = False
-                        continue
+                # Eliminate multiline comments
+                if "/*" in stripped_line:
+                    in_multiline_comment = True
+                if in_multiline_comment:
+                    if "*/" in stripped_line:
+                        in_multiline_comment = False
+                    continue
 
-                    # Eliminate single line comments
-                    if "//" in stripped_line:
-                        stripped_line = stripped_line.split("//")[0].strip()
+                # Eliminate single line comments
+                if "//" in stripped_line:
+                    continue
 
-                    # Ignore lines containing typedef and lines where # and define appear together (ignoring spaces)
-                    if stripped_line.startswith("typedef") or "#define" in stripped_line.replace(" ", ""):
-                        continue
+                # Ignore lines containing typedef and lines where # and define appear together (ignoring spaces)
+                if stripped_line.startswith("typedef") or "#define" in stripped_line.replace(" ", ""):
+                    continue
 
-                    # Split the line at the comment, if any, and only check the code part
-                    code_part = stripped_line.split("//")[0].strip()
-                    if "/*" in code_part:
-                        code_part = code_part.split("/*")[0].strip()
-
-                    for control_structure in control_structures:
-                        if control_structure in code_part:
-                            if "{" in code_part and not code_part.rstrip("/*").endswith("{"):
-                                logging.warning(f"Opening brace should be on the same line as the {control_structure} statement: line {line_number}")
-                                self.counts['brace_placement_check'] += 1
-                                control_structure_stack.append(control_structure)
-                            elif control_structure_stack and not code_part.startswith("{"):
-                                logging.warning(f"Opening brace should be on the same line as the {control_structure} statement: line {line_number}")
-                                self.counts['brace_placement_check'] += 1
-
-                    if any(pattern in line for pattern in function_patterns):
-                        continue
-
-                    if control_structure_stack and code_part.startswith("}"):
-                        last_structure = control_structure_stack.pop()
-                        if not code_part.endswith("}"):
-                            logging.warning(f"Closing brace should be on a new line after the {last_structure} block: line {line_number}")
+                for control_structure in control_structures:
+                    if control_structure in stripped_line:
+                        if "{" in stripped_line and not stripped_line.rstrip("/*").endswith("{"):
+                            logging.info(f"Opening brace should be on the same line as the {control_structure} statement: line {line_number}")
+                            self.counts['brace_placement_check'] += 1
+                            control_structure_stack.append(control_structure)
+                        elif control_structure_stack and not stripped_line.startswith("{"):
+                            logging.info(f"Opening brace should be on the same line as the {control_structure} statement: line {line_number}")
                             self.counts['brace_placement_check'] += 1
 
-                    if "}" in code_part and not code_part.startswith("}"):
-                        logging.warning(f"Closing brace should be on a new line: line {line_number}")
+                if any(pattern in line for pattern in function_patterns):
+                    continue
+
+                if control_structure_stack and stripped_line.startswith("}"):
+                    last_structure = control_structure_stack.pop()
+                    if not stripped_line.endswith("}"):
+                        logging.info(f"Closing brace should be on a new line after the {last_structure} block: line {line_number}")
                         self.counts['brace_placement_check'] += 1
 
-                logging.info(f"Brace placement check completed - Error Count: {self.counts['brace_placement_check']}")
-                
+                if "}" in stripped_line and not stripped_line.startswith("}"):
+                    logging.info(f"Closing brace should be on a new line: line {line_number}")
+                    self.counts['brace_placement_check'] += 1
+
+            logging.info(f"Brace placement check completed - Error Count: {self.counts['brace_placement_check']}")
+
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
-            logging.error(f"Error during brace placement check: {str(e)}")
+            logging.error(f"Error during brace placement check: line {line_number} - {str(e)}")
 
     def check_naming_conventions(self):
         try:
             with open(self.script_path, "r") as script_file:
-                for line_number, line in enumerate(script_file, start=1):
-                    line = line.strip()
+                lines = script_file.readlines()
 
-                    # Check for Prefix in STATUS Function name
-                    for func_name in EXPORT_FUNCTIONS:
-                        if func_name in line and not line.strip().startswith("EXPORT " + func_name):
-                            logging.warning(f"Function name should be prefixed with 'EXPORT': Line {line_number} '{line.strip()}'")
-                            self.counts['naming_conventions_check'] += 1
+            in_multiline_comment = False
+            for line_number, line in enumerate(lines, start=1):
+                # Check if the line starts a multi-line comment
+                if "/*" in line:
+                    in_multiline_comment = True
 
-                    # Check for local prefix
-                    if not any(func_name in line for func_name in EXPORT_FUNCTIONS):
-                        if line.startswith("STATUS ") and "(" in line and ")" in line:
-                            # Extract function name and arguments
-                            func_parts = line.split(" ")[1].split("(")
-                            if len(func_parts) > 1:
-                                func_name = func_parts[0]
-                                if func_name not in EXPORT_FUNCTIONS:
-                                    logging.warning(f"Function name should be prefixed with 'LOCAL': Line {line_number} '{line.strip()}'")
-                                    self.counts['naming_conventions_check'] += 1
+                # Skip checking if the line is within a comment
+                if in_multiline_comment or line.startswith("//"):
+                    # Check if the line ends a multi-line comment
+                    if "*/" in line:
+                        in_multiline_comment = False
+                    continue
+
+                # Check for Prefix in STATUS Function name
+                for func_name in EXPORT_FUNCTIONS:
+                    if func_name in line and not line.strip().startswith("EXPORT " + func_name):
+                        logging.info(f"Function name should be prefixed with 'EXPORT': Line {line_number} '{line.strip()}'")
+                        self.counts['naming_conventions_check'] += 1
+
+                # Check for local prefix
+                if not any(func_name in line for func_name in EXPORT_FUNCTIONS):
+                    if line.startswith("STATUS ") and "(" in line and ")" in line:
+                        # Extract function name and arguments
+                        func_parts = line.split(" ")[1].split("(")
+                        if len(func_parts) > 1:
+                            func_name = func_parts[0]
+                            if func_name not in EXPORT_FUNCTIONS:
+                                logging.info(f"Function name should be prefixed with 'LOCAL': Line {line_number} '{line.strip()}'")
+                                self.counts['naming_conventions_check'] += 1
 
             logging.info(f"Naming convention check completed - Error Count: {self.counts['naming_conventions_check']}")
 
@@ -567,24 +654,125 @@ class ScriptAnalyzer:
         except Exception as e:
             logging.error(f"Error during naming convention check: {str(e)}")
 
+    def check_operator_spacing(self):
+        try:
+            with open(self.script_path, "r") as script_file:
+                lines = script_file.readlines()
+
+            # Compile patterns
+            single_line_comment_pattern = re.compile(r'//.*')
+            multi_line_comment_pattern = re.compile(r'/\*.*?\*/')
+            multi_line_comment_start = re.compile(r'/\*')
+            multi_line_comment_end = re.compile(r'\*/')
+            preprocessor_directive_pattern = re.compile(r'^\s*#(include|pragma)')
+            operator_pattern = re.compile(r'({0})'.format('|'.join(re.escape(op) for op in OPERATORS if op not in ["++", "--"])))
+            format_specifier_pattern = re.compile('|'.join(re.escape(fs) for fs in FORMAT_SPECIFIERS))
+            correct_pointer_pattern = re.compile(r'\*p[A-Z]')  # Pattern to match correct pointers
+            incorrect_pointer_pattern = re.compile(r'\*[a-oq-zA-Z]')  # Pattern to match incorrect pointers
+
+            # Pattern to match pointer declarations
+            pointer_declaration_pattern = re.compile(r'\*\w+')
+
+            error_count = 0
+            pointer_error_count = 0
+            in_multi_line_comment = False
+            lines_with_errors = {}  # Dictionary to store line numbers and their respective operators
+
+            for line_number, line in enumerate(lines, start=1):
+                # Skip multi-line comments
+                if in_multi_line_comment:
+                    if multi_line_comment_end.search(line):
+                        in_multi_line_comment = False
+                    continue
+
+                if multi_line_comment_start.search(line):
+                    in_multi_line_comment = True
+                    continue
+
+                # Skip single-line comments and preprocessor directives
+                if single_line_comment_pattern.search(line) or preprocessor_directive_pattern.search(line):
+                    continue
+
+                # Skip lines with format specifiers
+                if format_specifier_pattern.search(line):
+                    continue
+
+                # Remove multi-line comments
+                line = multi_line_comment_pattern.sub('', line)
+
+                # Skip increment and decrement operators
+                if '++' in line or '--' in line:
+                    continue
+
+                # Check for pointer naming errors
+                incorrect_pointer_match = incorrect_pointer_pattern.search(line)
+                if incorrect_pointer_match and not correct_pointer_pattern.search(line):
+                    incorrect_pointer = incorrect_pointer_match.group()
+                    logging.info(f"Pointer Error: Incorrect pointer naming '{incorrect_pointer}' at line {line_number}.")
+                    pointer_error_count += 1
+                    continue
+
+                # Skip pointer declarations
+                if pointer_declaration_pattern.search(line):
+                    continue
+
+                # Check for operator spacing errors
+                operators_found = operator_pattern.findall(line)
+                for operator in operators_found:
+                    # Check if there are spaces around the operator
+                    spaced_operator_pattern = r'(?<!\S)' + re.escape(operator) + r'(?!\S)'
+                    if not re.search(spaced_operator_pattern, line):
+                        if line_number not in lines_with_errors:
+                            lines_with_errors[line_number] = set()
+                        lines_with_errors[line_number].add(operator)
+
+            # Log operator spacing errors
+            for line_number, operators in sorted(lines_with_errors.items()):
+                operator_list = ', '.join(operators)
+                logging.info(f"Operator Error: Improper spacing for operators {operator_list} in line {line_number}.")
+                error_count += 1
+
+            # Log summary of errors
+            logging.info(f"Operator spacing check completed - Error Count: {error_count}")
+            logging.info(f"Pointer naming check completed - Error Count: {pointer_error_count}")
+
+            # Update error counts
+            self.counts['operator_spacing_check'] = error_count
+            self.counts['pointer_naming_check'] = pointer_error_count
+
+        except FileNotFoundError:
+            logging.error(f"File not found: {self.script_path}")
+        except Exception as e:
+            logging.error(f"Error during operator spacing check: {str(e)}")
+
     def check_hex_values(self):
         try:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
+            in_multiline_comment = False
             for line_number, line in enumerate(lines, start=1):
+                # Check if the line starts a multi-line comment
+                if "/*" in line:
+                    in_multiline_comment = True
+
+                # Skip checking if the line is within a comment
+                if in_multiline_comment or line.startswith("//"):
+                    # Check if the line ends a multi-line comment
+                    if "*/" in line:
+                        in_multiline_comment = False
+                    continue
+
                 hex_values = re.findall(r'0x[A-F0-9]+', line)
                 for hex_value in hex_values:
                     if any(char.isupper() for char in hex_value):
-                        logging.warning(f"Avoid capital letters in hex values: {hex_value}")
+                        logging.info(f"Avoid capital letters in hex values at line {line_number}: {hex_value}")
                         self.counts['hex_value_check'] += 1
 
             logging.info(f"Hex value check completed - Error Count: {self.counts['hex_value_check']}")
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
-        except Exception as e:
-            logging.error(f"Error during hex value check: {str(e)}")
 
     def check_comments(self):
         consecutive_comments = []
@@ -601,7 +789,7 @@ class ScriptAnalyzer:
                         for i in range(0, len(quote_indices), 2):
                             string_content = line[quote_indices[i] + 1:quote_indices[i + 1]]
                             if "//" in string_content:
-                                logging.warning(f"Avoid using // and use /*..*/: Line {line_number} '{line}'")
+                                logging.info(f"Avoid using // and use /*..*/: Line {line_number} '{line}'")
                                 self.counts['comment_check'] += 1
 
                     # Check for consecutive single-line comments (//)
@@ -609,7 +797,7 @@ class ScriptAnalyzer:
                         consecutive_comments.append(line_number)
                     else:
                         if len(consecutive_comments) > 1:
-                            logging.warning(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
+                            logging.info(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
                             self.counts['comment_check'] += 1
                         consecutive_comments = []
 
@@ -628,7 +816,7 @@ class ScriptAnalyzer:
 
                 # Check for any remaining consecutive comments at the end of the file
                 if len(consecutive_comments) > 1:
-                    logging.warning(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
+                    logging.info(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
                     self.counts['comment_check'] += 1
                 
                 logging.info(f"Comment based check completed - Error Count: {self.counts['comment_check']}")
@@ -643,9 +831,20 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
-            # Check for consistent line endings (CRLF or LF)
+            in_multiline_comment = False
             line_endings = set()
             for line_number, line in enumerate(lines, start=1):
+                # Check if the line starts a multi-line comment
+                if "/*" in line:
+                    in_multiline_comment = True
+
+                # Skip checking if the line is within a comment
+                if in_multiline_comment or line.startswith("//"):
+                    # Check if the line ends a multi-line comment
+                    if "*/" in line:
+                        in_multiline_comment = False
+                    continue
+
                 try:
                     if '\r\n' in line:
                         line_endings.add('CRLF')
@@ -662,7 +861,7 @@ class ScriptAnalyzer:
                     self.counts['consistency_check'] += 1
 
             if len(line_endings) > 1:
-                logging.warning('Inconsistent line endings found in the script. Use either CRLF (line break "\r\n") or LF (line break "\n"), not both.')
+                logging.info('Inconsistent line endings found in the script. Use either CRLF (line break "\r\n") or LF (line break "\n"), not both.')
                 self.counts['consistency_check'] += 1
 
             logging.info(f"Consistency check completed - Error Count: {self.counts['consistency_check']}")
@@ -679,16 +878,25 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
+            in_multiline_comment = False
             for line_number, line in enumerate(lines, start=1):
+                # Check if the line starts a multi-line comment
+                if "/*" in line:
+                    in_multiline_comment = True
+
                 # Skip checking if the line is within a comment or within double quotes
-                if re.search(r'//.*|/\*.*\*/|".*"', line):
+                if in_multiline_comment or line.startswith("//"):
+                    # Check if the line ends a multi-line comment
+                    if "*/" in line:
+                        in_multiline_comment = False
                     continue
 
-                if re.search(r'\s{2,}', line):  # Corrected regular expression
-                    logging.warning(f"Excess whitespace detected between words in Line {line_number}.")
+                matches = re.findall(r'(\S+)\s{2,}(\S+)', line)
+                for match in matches:
+                    logging.info(f"Whitespace Check: Excess whitespace detected between '{match[0]}' and '{match[1]}': Line {line_number}.")
                     self.counts['excess_whitespace_check'] += 1
 
-            logging.info(f"Excess whitespace check completed - Error Count: {self.counts['excess_whitespace_check']}")
+            logging.info(f"Whitespace Check: Excess whitespace check completed - Error Count: {self.counts['excess_whitespace_check']}")
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
@@ -713,10 +921,10 @@ class ScriptAnalyzer:
                 match = re.search(check_pattern, line)
                 if match:
                     variable = match.group(1)  # Get the variable name from the match
-                    logging.error(f"Please replace unsigned {variable} <= 0 in line {line_number} with !{variable} instead.")
+                    logging.error(f"Unsigned Logic: Please replace unsigned {variable} <= 0: Line {line_number} with !{variable} instead.")
                     error_count += 1  # Increment error count
 
-            logging.info(f"Unsigned logic check completed - Error Count: {error_count}")
+            logging.info(f"Unsigned Logic: Unsigned logic check completed - Error Count: {error_count}")
             self.counts['unsigned_logic_check'] += error_count
 
         except FileNotFoundError:
@@ -744,10 +952,10 @@ class ScriptAnalyzer:
                     arguments = match.group(4).split(',')  # Split arguments in sysLog
                     for arg in arguments:
                         if arg.strip() in variable_declarations and format_specifier != '%u':
-                            logging.warning(f"Incorrect Format used to print unsigned variable {arg.strip()} :line {line_number}: Please Use %u instead.")
+                            logging.info(f"Unsigned Variable: Incorrect Format used to print unsigned variable {arg.strip()}: Line {line_number}: Please Use %u instead.")
                             error_count += 1  # Increment error count
 
-            logging.info(f"Unsigned variables check completed - Error Count: {error_count}")
+            logging.info(f"Unsigned Variable: Unsigned variables check completed - Error Count: {error_count}")
             self.counts['unsigned_print_check'] += error_count
 
         except FileNotFoundError:
@@ -770,10 +978,10 @@ class ScriptAnalyzer:
                         match = re.search(any_format_pattern, line)
                         if match:
                             incorrect_format = match.group(0)  # Get the incorrect format specifier
-                            logging.warning(f"Incorrect format specifier for address in line {line_number}: Replace {incorrect_format} with %x or its variations.")
+                            logging.info(f"Address Format: Incorrect format specifier for address: Line {line_number}: Replace {incorrect_format} with %x or its variations.")
                             error_count += 1  # Increment error count
 
-            logging.info(f"Address print format check completed - Error Count: {error_count}")
+            logging.info(f"Address Format: Address print format check completed - Error Count: {error_count}")
             self.counts['address_print_check'] += error_count
 
         except FileNotFoundError:
@@ -814,6 +1022,8 @@ def send_email(sender_email, sender_password, recipient_email, attachment_path, 
         'replace_name_check': 'Name Check eeprom',
         'consistency_check': 'Code Uniformity Check',
         'excess_whitespace_check': 'Whitespace Reduction Analysis',
+        'operator_spacing_check': 'Operator Spacing Check',
+        'pointer_naming_check': 'Pointer Naming Convention',
         'unsigned_print_check':'Unsigned Print Condition',
         'unsigned_logic_check':'Unsigned Logic Check',
         'address_print_check':'Hex-Address Print Check'
