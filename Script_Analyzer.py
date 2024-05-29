@@ -48,7 +48,11 @@ RESERVED_TYPES = [
     'UINT64_ATOMIC', 'DS7505_DEV_MASK', 'const char'
 ]
 UI_VARIABLES = ['unsigned', 'UINT8', 'UINT32', 'UINT64', 'HMC7043_REG', 'HMC7043_PRD_ID', 'CKDST_DEV', 'CKDST_DEV_MASK', 'CKDST_FREQ_HZ']
-
+# List of known keywords to ignore
+KNOWN_KEYWORDS = {
+    'const', 'static', 'extern', 'if', 'for', 'while', 'switch', 'case', 'default', 'break', 'continue', 'return', 'goto',
+    'else', 'define', 'pragma', 'sizeof', 'typedef', 'do', 'void', 'volatile', 'register', 'restrict', 'inline', 'enum', 'struct', 'union'
+}
 class ScriptAnalyzer:
     def __init__(self, script_path, recipient_email, encrypted_sender_email, encrypted_sender_password, encryption_key):
         self.script_path = Path(script_path)
@@ -58,7 +62,7 @@ class ScriptAnalyzer:
         self.log_file = self.get_log_file_name()
         self.encryption_key = encryption_key
         self.global_declarations = []
-        self.RESERVED_TYPES = RESERVED_TYPES
+        self.RESERVED_TYPES = set(RESERVED_TYPES)  # Use a set for efficient membership checking
         self.counts = {
             'line_length_limit_check': 0,
             'excess_whitespace_check': 0,
@@ -66,14 +70,14 @@ class ScriptAnalyzer:
             'pointer_naming_check': 0,
             'address_print_check': 0,
             'unsigned_print_check': 0,
+            'comment_check': 0,
+            'hex_value_check': 0,
+            'variable_declarations_check': 0,
             'naming_conventions_check': 0,
             'unsigned_logic_check': 0,
 			'replace_name_check': 0,
-            'variable_declarations_check': 0,
             'spacing_between_routines_check': 0,
-            'hex_value_check': 0,
 			'brace_placement_check': 0,
-            'comment_check': 0,
             'consistency_check': 0,
         }
         logging.basicConfig(filename=self.log_file, level=logging.INFO,
@@ -263,44 +267,64 @@ class ScriptAnalyzer:
         summary += "----------------------------------------\n"
         with open(self.log_file, 'a') as log_file:
             log_file.write(summary)
-
+    
+    def is_valid_type_name(self, type_name):
+        """Check if a type name is valid."""
+        # Check if the type name is not a known keyword and not in the RESERVED_TYPES list
+        if type_name in KNOWN_KEYWORDS or type_name in self.RESERVED_TYPES:
+            return False
+        # Further validation rules can be added here
+        return True
+    
     def extract_global_declarations(self):
         # Patterns for various global declarations
         patterns = [
-            re.compile(r'typedef\s+struct\s+(\w+)'),
-            re.compile(r'LOCAL\s+struct\s+(\w+)'),
-            re.compile(r'typedef\s+enum\s+(\w+)'),
-            re.compile(r'typedef\s+union\s+(\w+)'),
-            re.compile(r'static\s+(\w+)'),
-            re.compile(r'extern\s+(\w+)')
+            re.compile(r'typedef\s+struct\s+\{[^}]*\}\s*(\w+)\s*;', re.DOTALL | re.IGNORECASE),
+            re.compile(r'LOCAL\s+struct\s+\{[^}]*\}\s*(\w+)\s*;', re.DOTALL | re.IGNORECASE),
+            re.compile(r'typedef\s+enum\s+\{[^}]*\}\s*(\w+)\s*;', re.DOTALL | re.IGNORECASE),
+            re.compile(r'typedef\s+union\s+\{[^}]*\}\s*(\w+)\s*;', re.DOTALL | re.IGNORECASE),
+            re.compile(r'static\s+(\w+)\s+\w+\s*;', re.IGNORECASE),
+            re.compile(r'extern\s+(\w+)\s+\w+\s*;', re.IGNORECASE)
         ]
 
         # Pattern for function declarations
-        func_pattern = re.compile(r'\((.*?)\)')
+        func_pattern = re.compile(r'(\w+)\s+\w+\s*\((\w+\s+\w+(,\s*\w+\s+\w+)*)\)', re.IGNORECASE)
 
         try:
             with open(self.script_path, "r") as script_file:
-                lines = script_file.readlines()
+                content = script_file.read()
 
-            for line in lines:
-                for pattern in patterns:
-                    match = pattern.search(line)
-                    if match:
-                        type_name = match.group(1)
-                        if type_name not in self.RESERVED_TYPES:
-                            self.RESERVED_TYPES.append(type_name)  # Add new type to RESERVED_TYPES
-                            logging.info(f"Added new reserved type: {type_name}")
-                        return type_name
+            initial_reserved_types = set(self.RESERVED_TYPES)
 
-                # Check for function declarations
-                match = func_pattern.search(line)
-                if match:
-                    params = match.group(1).split(',')
-                    for param in params:
-                        type_name = param.split()[0]  # Get the type from the parameter declaration
-                        if type_name not in self.RESERVED_TYPES:
-                            self.RESERVED_TYPES.append(type_name)  # Add new type to RESERVED_TYPES
+            for pattern in patterns:
+                matches = pattern.findall(content)
+                for match in matches:
+                    type_name = match.strip()
+                    if self.is_valid_type_name(type_name):
+                        self.RESERVED_TYPES.add(type_name)
+                        logging.info(f"Added new reserved type: {type_name}")
+
+            # Check for function declarations
+            func_matches = func_pattern.findall(content)
+            for match in func_matches:
+                return_type, func_name, params = match
+                if self.is_valid_type_name(return_type):
+                    self.RESERVED_TYPES.add(return_type)
+                    logging.info(f"Added new reserved return type from function: {return_type}")
+
+                param_list = params.split(',')
+                for param in param_list:
+                    param_parts = param.strip().split()
+                    if len(param_parts) > 1:
+                        type_name = param_parts[0]
+                        if self.is_valid_type_name(type_name):
+                            self.RESERVED_TYPES.add(type_name)
                             logging.info(f"Added new reserved type from function parameter: {type_name}")
+
+            # Find and log the newly added types
+            new_reserved_types = self.RESERVED_TYPES - initial_reserved_types
+            if new_reserved_types:
+                logging.info(f"Newly appended reserved types: {', '.join(new_reserved_types)}")
 
             logging.info("Global declaration extraction completed")
 
@@ -308,8 +332,6 @@ class ScriptAnalyzer:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
             logging.error(f"Error during global declaration extraction: {str(e)}")
-
-        return None
     
     def check_include_directive(self):
         try:
@@ -402,67 +424,66 @@ class ScriptAnalyzer:
     def check_variable_declaration(self):
         global_variable_declaration = False
         in_control_data_block = False
-        in_typedef_struct_block = False
-        in_local_struct_block = False
         block_open_count = 0
+        initialized_variables = set()
         function_pattern = re.compile(r'\s*(EXPORT\s+|LOCAL\s+|STATIC\s+)?\w+\s+\w+\s*\([^)]*\)\s*{?$')
-        in_function_declaration = False
 
         try:
             with open(self.script_path, "r") as script_file:
-                for line_number, line in enumerate(script_file, start=1):
-                    line = line.strip()
+                content = script_file.readlines()
 
-                    if line.startswith("#include"):
-                        global_variable_declaration = True
+            for line_number, line in enumerate(content, start=1):
+                line = line.strip()
 
-                    if global_variable_declaration and line.startswith("/* Control Data */"):
-                        global_variable_declaration = False
-                        in_control_data_block = True
+                # Skip empty lines
+                if not line:
+                    continue
 
-                    if line.startswith("typedef") or line.startswith("struct"):
-                        in_typedef_struct_block = True
+                # Skip comments
+                if line.startswith("//") or line.startswith("/*"):
+                    continue
 
-                    if line.startswith("LOCAL struct"):
-                        in_local_struct_block = True
+                # Process #include and control data block
+                if line.startswith("#include"):
+                    global_variable_declaration = True
 
-                    if "{" in line:
-                        block_open_count += 1
+                if global_variable_declaration and line.startswith("/* Control Data */"):
+                    global_variable_declaration = False
+                    in_control_data_block = True
 
-                    if in_control_data_block and block_open_count == 0:
-                        in_control_data_block = False
+                # Count block open and close
+                if "{" in line:
+                    block_open_count += 1
+                if "}" in line:
+                    block_open_count -= 1
 
-                    if in_typedef_struct_block and block_open_count == 0:
-                        in_typedef_struct_block = False
+                # Skip lines containing "(" or ")" to avoid function and argument checks
+                if "(" in line or ")" in line:
+                    continue
 
-                    if in_local_struct_block and block_open_count == 0:
-                        in_local_struct_block = False
+                # Check for variable declarations
+                if "=" in line and line.strip().endswith(";"):
+                    var_name = line.split("=")[0].strip().split()[-1]
+                    if "->" in line or "." in line:
+                        continue  # Skip struct member assignments
 
-                    if "(" in line or ")" in line:
-                        continue  # Skip lines containing "(" or ")" to avoid function and argument checks
+                    if block_open_count > 0 or var_name not in initialized_variables:
+                        initialized_variables.add(var_name)
+                    else:
+                        logging.info(f"Variable Initialization: Variable '{var_name}' already initialized: Line {line_number} '{line.strip()}'")
+                        continue  # Skip logging as error if already initialized
 
-                    if "=" in line and not any(line.strip().startswith(data_type) for data_type in RESERVED_TYPES):
-                        if line.strip().endswith(";") and len(line.split("=")) > 1:
-                            var_name = line.split("=")[0].strip().split()[-1]
-                            if not any(line.strip().startswith(var_name) for line in script_file):
-                                logging.info(f"Variable Declaration: must be done before initialization: Line {line_number} '{line.strip()}'")
-                                self.counts['variable_declarations_check'] += 1
-                        continue
+                # Check for function declarations
+                if function_pattern.match(line):
+                    continue  # Skip function declaration or definition lines
 
-                    if function_pattern.match(line):
-                        in_function_declaration = True
-                        continue  # Skip function declaration or definition lines
-
-                    if not global_variable_declaration and not in_control_data_block and not in_typedef_struct_block and not in_local_struct_block and not in_function_declaration:
-                        if any(line.strip().startswith(data_type) for data_type in RESERVED_TYPES):
-                            if not line.endswith(";"):
-                                logging.info(f"Variable Declaration: Declaration needs to be at the beginning of the block: Line {line_number} '{line.strip()}'")
-                                self.counts['variable_declarations_check'] += 1
-
-                    if "}" in line:
-                        block_open_count -= 1
-                        if block_open_count == 0:
-                            in_function_declaration = False
+                # Check for reserved types in variable declarations
+                if not global_variable_declaration and not in_control_data_block:
+                    if any(line.strip().startswith(data_type) for data_type in self.RESERVED_TYPES):
+                        var_name = line.split()[-1].replace(";", "")
+                        if var_name not in initialized_variables and not line.endswith(";") and "=" not in line:
+                            logging.info(f"Variable Declaration: Declaration of variable '{var_name}' needs to be at the beginning of the block: Line {line_number} '{line.strip()}'")
+                            self.counts['variable_declarations_check'] += 1
 
             logging.info(f"Variable Declaration: Check completed - Error Count: {self.counts['variable_declarations_check']}")
 
@@ -470,7 +491,7 @@ class ScriptAnalyzer:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
             logging.error(f"Error during variable declaration check: {str(e)}")
-
+            
     def check_variable_initialization(self):
         global_variable_declaration = False
         function_pattern = re.compile(r'\w+\s+\w+\(.*\)\s*{?$')
@@ -787,17 +808,27 @@ class ScriptAnalyzer:
                     if '"' in line:
                         quote_indices = [i for i, char in enumerate(line) if char == '"']
                         for i in range(0, len(quote_indices), 2):
-                            string_content = line[quote_indices[i] + 1:quote_indices[i + 1]]
-                            if "//" in string_content:
-                                logging.info(f"Avoid using // and use /*..*/: Line {line_number} '{line}'")
-                                self.counts['comment_check'] += 1
+                            if i + 1 < len(quote_indices):  # Ensure there's a closing quote
+                                string_content = line[quote_indices[i] + 1:quote_indices[i + 1]]
+                                if "//" in string_content:
+                                    logging.info(f"Avoid using // and use /*..*/: Line {line_number} '{line}'")
+                                    self.counts['comment_check'] += 1
 
-                    # Check for consecutive single-line comments (//)
+                    # Check for single-line comments (//) followed by a comment
                     if "//" in line and not in_string and not in_multiline_comment:
-                        consecutive_comments.append(line_number)
+                        comment_index = line.index("//")
+                        comment_part = line[comment_index + 2:].strip()
+                        if comment_part:  # Check if there's a comment after //
+                            consecutive_comments.append((line_number, line))
                     else:
                         if len(consecutive_comments) > 1:
-                            logging.info(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
+                            start_line = consecutive_comments[0][0]
+                            end_line = consecutive_comments[-1][0]
+                            logging.info(f"Avoid using // and use /*..*/ for Comments between lines: {start_line} to {end_line}")
+                            self.counts['comment_check'] += 1
+                        elif len(consecutive_comments) == 1:
+                            line_number, comment_line = consecutive_comments[0]
+                            logging.info(f"Avoid using // and use /*..*/: Line {line_number} '{comment_line}'")
                             self.counts['comment_check'] += 1
                         consecutive_comments = []
 
@@ -808,17 +839,23 @@ class ScriptAnalyzer:
                     if "*/" in line and in_multiline_comment:
                         in_multiline_comment = False
 
-                    # Check for start of string
-                    if '"' in line and not in_string:
-                        in_string = True
-                    elif '"' in line and in_string:
-                        in_string = False
+                    # Check for start and end of string
+                    if '"' in line:
+                        quote_count = line.count('"')
+                        if quote_count % 2 == 1:
+                            in_string = not in_string
 
                 # Check for any remaining consecutive comments at the end of the file
                 if len(consecutive_comments) > 1:
-                    logging.info(f"Avoid using // and use /*..*/ for Comments between lines: {consecutive_comments[0]} to {consecutive_comments[-1]}")
+                    start_line = consecutive_comments[0][0]
+                    end_line = consecutive_comments[-1][0]
+                    logging.info(f"Comment Check: Avoid using // and use /*..*/ for Comments between Lines: {start_line} and {end_line}")
                     self.counts['comment_check'] += 1
-                
+                elif len(consecutive_comments) == 1:
+                    line_number, comment_line = consecutive_comments[0]
+                    logging.info(f"Comment Check: Avoid using // and use /*..*/: Line {line_number} '{comment_line}'")
+                    self.counts['comment_check'] += 1
+
                 logging.info(f"Comment based check completed - Error Count: {self.counts['comment_check']}")
 
         except FileNotFoundError:
@@ -947,6 +984,16 @@ class ScriptAnalyzer:
             error_count = 0  # Initialize error count
 
             for line_number, line in enumerate(lines, start=1):
+                # Check for nBytes variable declaration
+                nbytes_pattern = r'\b(' + '|'.join(UI_VARIABLES) + r')\s+nBytes\b'
+                nbytes_match = re.search(nbytes_pattern, line)
+                if nbytes_match:
+                    data_type = nbytes_match.group(1)
+                    if data_type != 'unsigned':
+                        logging.info(f"Unsigned Variable: Please replace '{data_type}' with 'unsigned' to declare 'nBytes': Line {line_number}")
+                        error_count += 1
+                        self.counts['unsigned_print_check'] += 1
+
                 for match in re.finditer(syslog_pattern, line):
                     format_specifier = match.group(2)
                     arguments = match.group(4).split(',')  # Split arguments in sysLog
@@ -954,9 +1001,9 @@ class ScriptAnalyzer:
                         if arg.strip() in variable_declarations and format_specifier != '%u':
                             logging.info(f"Unsigned Variable: Incorrect Format used to print unsigned variable {arg.strip()}: Line {line_number}: Please Use %u instead.")
                             error_count += 1  # Increment error count
+                            self.counts['unsigned_print_check'] += 1
 
             logging.info(f"Unsigned Variable: Unsigned variables check completed - Error Count: {error_count}")
-            self.counts['unsigned_print_check'] += error_count
 
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")

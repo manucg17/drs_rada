@@ -5,29 +5,33 @@
     <!-- Styling for the page -->
     <style>
         body {
-            background-color: #1a1a1a;
-            color: #ffffff; /* White text color */
-            font-family: 'Roboto', sans-serif;
+            background-color: #0c1620; /* Main Background color */
+            color: #CABA9c; /* White text color - No File Chosen*/
+            font-family: Verdana, sans-serif;
             margin: 25px auto 0;
             padding: 0;
         }
 
         h1 {
-            color: #9d9eba;
+            color: #CABA9c; /* Font -Script Analyzer - DRS RADA color */
             text-align: center;
             margin-top: 20px;
+            font-size: 1.8em; /* Larger font size */
+            font-weight: bold; /* Bold font weight */
+            text-shadow: 5px 5px 5px rgba(0, 0, 0, 0.5);
         }
 
         form {
-            max-width: 500px;
+            max-width: 450px;
             margin: 20px auto;
-            padding: 20px;
-            background-color: #42445c; 
+            padding: 60px;
+            background-color: #343a40; /*Inner Box color*/ 
             border-radius: 5px;
+            box-shadow: 15px 15px 15px rgba(0, 0, 0, 0.5);
         }
 
         label {
-            color: #d7d9f6; 
+            color: #CABA9c; /*Font color for Recipient and Select File*/
             font-size: 1.2em;
             font-weight: bold;
         }
@@ -44,25 +48,27 @@
         }
 
         input[type="submit"] {
-            width: 100%;
+            width: 39%;
             padding: 10px;
+            font-weight: bold;
+            font-size: 1.1em;
+            font-family: Verdana, sans-serif;
             margin-top: 5px;
-            margin-bottom: 10px;
+            margin-bottom: -30px;
             box-sizing: border-box;
             border: none;
             border-radius: 3px;
-        }
-
-        input[type="submit"] {
-            background-color: #7a7c97; 
-            color: #1a1a1a; 
-            font-size: 1em;
-            font-weight: bold;
+            display: inline-block; /* Ensure the button is displayed as an inline block */
+            background-color: #99B99F; 
+            color: #39300d; /*Submit Font color*/
             cursor: pointer;
+            box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.5);
+            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5); /* Shadow effect for the text */
         }
 
         input[type="submit"]:hover {
-            background-color: #c3c4e1; /* Darker blue on hover */
+            background-color: #4b5320; /* Submit Button on hover */
+            color: #ffff;
         }
 
         ul {
@@ -84,7 +90,7 @@
             overflow: hidden;
             display: block; /* Change 'none' to 'block' or 'inline-block' */
         }
-        
+
         /* Styling for the progress bar */
         .progress {
             width: 0%;
@@ -125,16 +131,18 @@
     <!-- Form for uploading a file -->
     <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
         <!-- Input for recipient email address -->
-        <label for="recipient_email">Recipient Email Address:</label><br>
+        <label for="recipient_email" style="font-weight: bold; font-size: 1.1em; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);">Recipient Email Address:</label><br>
         <input type="email" id="recipient_email" name="recipient_email" pattern="[a-zA-Z0-9._%+-]+@(thinkpalm)\.com$" title="Please enter a valid email from the Thinkpalm domain" required><br>
-        <small id="email-error" style="display:none; color:red;">Expected Email domain is example@thinkpalm.com</small><br><br>
+        <small id="email-error" style="display:none; color:red;">Expected Email domain is example@thinkpalm.com</small><br>
 
         <!-- Input for selecting a file -->
-        <label for="file">Select File:</label><br>
+        <label for="file" style="font-weight: bold; font-size: 1.1em; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);">Select File:</label><br>
         <input type="file" id="file" name="file" accept=".c,.h" required><br><br>
 
-        <!-- Submit button to upload the file -->
-        <input type="submit" value="Submit">
+        <!-- Submit button wrapper -->
+        <div style="text-align: center;">
+            <input type="submit" value="Submit">
+        </div>
 
         <!-- Label and progress bar for file upload progress -->
         <label id="progress_label" style="display: none;">Uploading...</label>
@@ -172,16 +180,6 @@
                 return;
             }
 
-            // Check if the file size exceeds 5MB
-            if (fileInput.files[0].size > 5 * 1024 * 1024) { // 5MB in bytes
-                // Show error popup
-                showPopup("File is too large, please select a smaller file.", true);
-                // Clear the file input
-                fileInput.value = '';
-                event.preventDefault(); // Prevent form submission
-                return;
-            }
-
             var xhr = new XMLHttpRequest();
             xhr.upload.addEventListener('progress', function(e) {
                 if (e.lengthComputable) {
@@ -191,7 +189,7 @@
             });
             xhr.upload.addEventListener('load', function(e) {
                 // File upload completed, show success popup
-                showPopup("File Uploaded Successfully - Analyzed and Email Sent", false);
+                showPopup("File Uploaded Successfully for Analysis", false);
                 // Simulate sending email (1.5s delay)
                 setTimeout(function() {
                     showPopup("Successful!", false);
@@ -214,6 +212,14 @@
                 setTimeout(function() {
                     popup.style.display = 'none';
                 }, 1500); // Close the popup after 1.5 seconds
+            }
+        });
+
+        document.getElementById('file').addEventListener('change', function() {
+            var maxSize = 4 * 1024 * 1024;
+            if (this.files[0].size > maxSize) {
+                alert('File is too large, please select a smaller file.');
+                this.value = '';
             }
         });
     </script>
