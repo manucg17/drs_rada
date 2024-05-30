@@ -1,105 +1,78 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title> Script Analyzer - DRS RADA </title>
-    <!-- Styling for the page -->
+    <title>Script Analyzer - DRS RADA</title>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="relative min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 bg-gray-500 bg-no-repeat bg-cover relative items-center"
+        style="background-image: url(https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D);">
+        <div class="absolute bg-black opacity-60 inset-0 z-0"></div>
+        <div class="sm:max-w-lg w-full p-10 rounded-xl z-10" style="background-color: rgba(229, 231, 235, 0.779);">
+            <div class="text-center">
+                <h2 class="mt-5 text-3xl font-bold text-gray-900">
+                    Script Analyzer - DRS RADA
+                </h2>
+                <p class="mt-2 text-sm text-gray-900">C Coding Standards Analyzer</p>
+            </div>
+            <form class="mt-8 space-y-3" id="uploadForm">
+                <div class="grid grid-cols-1 space-y-2">
+                    <label class="text-sm font-bold text-gray-800 tracking-wide">Recipient Email Address:</label>
+                    <input id="recipient_email" name="recipient_email" class="text-base p-2 border border-black border-2 bg-gray-300 rounded-lg focus:outline-none focus:border-indigo-500" type="email" placeholder="user-id@thinkpalm.com" required>
+                    <div id="email-error" class="text-red-500 text-sm hidden">Invalid email domain. Please use user-id@thinkpalm.com.</div>
+                </div>
+                <div class="grid grid-cols-1 space-y-2">
+                    <label class="text-sm font-bold text-gray-800 tracking-wide">Attach File</label>
+                    <div class="flex items-center justify-center w-full">
+                        <label class="flex flex-col rounded-lg border-4 border-dashed w-full h-60 p-10 group text-center">
+                            <div class="h-full w-full text-center flex flex-col items-center justify-center">
+                                <div class="flex flex-auto max-h-48 w-2/5 mx-auto -mt-10">
+                                    <img class="has-mask h-36 object-center" src="{{ url_for('static', filename='C-vector-file.png') }}" alt="C file upload image">
+                                </div>
+                                <p class="pointer-none text-gray-700" id="fileLabel"><a href="#" id="fileLink" class="text-blue-600 hover:underline">Select the .c File</a><br>to be Reviewed<br></p>
+                            </div>
+                            <input id="file" name="file" type="file" class="hidden" accept=".c,.h" required>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex justify-between">
+                    <button type="submit" id="submitButton" class="my-5 w-1/2 flex justify-center bg-blue-500 text-gray-100 p-4 rounded-full tracking-wide font-semibold focus:outline-none focus:shadow-outline hover:bg-blue-600 shadow-lg cursor-pointer transition ease-in duration-300">
+                        Submit
+                    </button>
+                    <button type="button" id="resetButton" class="my-5 w-1/2 flex justify-center bg-gray-500 text-gray-100 p-4 rounded-full tracking-wide font-semibold focus:outline-none focus:shadow-outline hover:bg-gray-600 shadow-lg cursor-pointer transition ease-in duration-300">
+                        Reset
+                    </button>
+                </div>
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress" id="progress"></div>
+                </div>
+                <div id="successMessage" class="text-center mt-4 text-green-600 font-semibold hidden">File uploaded successfully. Logs will be sent to the recipient.</div>
+            </form>
+        </div>
+    </div>
+
     <style>
-        body {
-            background-color: #0c1620; /* Main Background color */
-            color: #CABA9c; /* White text color - No File Chosen*/
-            font-family: Verdana, sans-serif;
-            margin: 25px auto 0;
-            padding: 0;
+        .has-mask {
+            position: absolute;
+            clip: rect(10px, 150px, 130px, 10px);
         }
 
-        h1 {
-            color: #CABA9c; /* Font -Script Analyzer - DRS RADA color */
-            text-align: center;
-            margin-top: 20px;
-            font-size: 1.8em; /* Larger font size */
-            font-weight: bold; /* Bold font weight */
-            text-shadow: 5px 5px 5px rgba(0, 0, 0, 0.5);
-        }
-
-        form {
-            max-width: 450px;
-            margin: 20px auto;
-            padding: 60px;
-            background-color: #343a40; /*Inner Box color*/ 
-            border-radius: 5px;
-            box-shadow: 15px 15px 15px rgba(0, 0, 0, 0.5);
-        }
-
-        label {
-            color: #CABA9c; /*Font color for Recipient and Select File*/
-            font-size: 1.2em;
-            font-weight: bold;
-        }
-
-        input[type="email"],
-        input[type="file"]{
-            width: 100%;
-            padding: 10px;
-            margin-top: 5px;
-            margin-bottom: 10px;
-            box-sizing: border-box;
-            border: none;
-            border-radius: 3px;
-        }
-
-        input[type="submit"] {
-            width: 39%;
-            padding: 10px;
-            font-weight: bold;
-            font-size: 1.1em;
-            font-family: Verdana, sans-serif;
-            margin-top: 5px;
-            margin-bottom: -30px;
-            box-sizing: border-box;
-            border: none;
-            border-radius: 3px;
-            display: inline-block; /* Ensure the button is displayed as an inline block */
-            background-color: #99B99F; 
-            color: #39300d; /*Submit Font color*/
-            cursor: pointer;
-            box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.5);
-            text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5); /* Shadow effect for the text */
-        }
-
-        input[type="submit"]:hover {
-            background-color: #4b5320; /* Submit Button on hover */
-            color: #ffff;
-        }
-
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        li {
-            color: #f39c12; /* Orange message text color */
-            margin-bottom: 5px;
-        }
-
-        /* Styling for the progress bar */
         .progress-bar {
             width: 100%;
             background-color: #ddd;
             border-radius: 5px;
             margin-top: 10px;
             overflow: hidden;
-            display: block; /* Change 'none' to 'block' or 'inline-block' */
+            display: none; /* Initially hide the progress bar */
         }
 
-        /* Styling for the progress bar */
         .progress {
             width: 0%;
             height: 20px;
-            background-color: #f7dc6f; /* Blue progress color */
+            background-color: #f7dc6f; /* Yellow progress color */
             transition: width 0.5s; /* Smooth transition for width change */
         }
 
-        /* Styling for the popup */
         .popup {
             position: fixed;
             top: 50%;
@@ -113,114 +86,92 @@
             z-index: 9999;
             display: none;
         }
+
         .success {
             color: green;
             font-weight: bold;
         }
+
         .error {
             color: red;
             font-weight: bold;
         }
     </style>
-    <!-- Include the Roboto font from Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <!-- Page heading -->
-    <h1> Script Analyzer - DRS RADA </h1>
-    <!-- Form for uploading a file -->
-    <form id="upload-form" method="post" action="/upload" enctype="multipart/form-data">
-        <!-- Input for recipient email address -->
-        <label for="recipient_email" style="font-weight: bold; font-size: 1.1em; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);">Recipient Email Address:</label><br>
-        <input type="email" id="recipient_email" name="recipient_email" pattern="[a-zA-Z0-9._%+-]+@(thinkpalm)\.com$" title="Please enter a valid email from the Thinkpalm domain" required><br>
-        <small id="email-error" style="display:none; color:red;">Expected Email domain is example@thinkpalm.com</small><br>
 
-        <!-- Input for selecting a file -->
-        <label for="file" style="font-weight: bold; font-size: 1.1em; text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);">Select File:</label><br>
-        <input type="file" id="file" name="file" accept=".c,.h" required><br><br>
-
-        <!-- Submit button wrapper -->
-        <div style="text-align: center;">
-            <input type="submit" value="Submit">
-        </div>
-
-        <!-- Label and progress bar for file upload progress -->
-        <label id="progress_label" style="display: none;">Uploading...</label>
-        <div class="progress-bar" style="display: none;">
-            <div class="progress" id="progress" style="width: 0%"></div>
-        </div>
-    </form>
-    <!-- Popup for success or error message -->
-    <div id="popup" class="popup" style="display: none;"></div>
-
-    <!-- JavaScript for updating the progress bar and showing the popup -->
     <script>
-        document.querySelector('form').addEventListener('submit', function(event) {
-            var progress = document.getElementById('progress');
-            var fileInput = document.getElementById('file');
-            var fileName = fileInput.value;
-            
-            // Check if the uploaded file has a .c or .h extension
-            if (!fileName.toLowerCase().endsWith('.c') && !fileName.toLowerCase().endsWith('.h')) {
-                // Show error popup
-                showPopup("Invalid file format. Please upload a file with a .c or .h extension.", true);
-                // Clear the file input
-                fileInput.value = '';
-                event.preventDefault(); // Prevent form submission
-                return;
-            }
-
-            // Check if the email is from the Thinkpalm domain
-            var emailInput = document.getElementById('recipient_email');
-            var email = emailInput.value;
-            if (!email.toLowerCase().endsWith('@thinkpalm.com')) {
-                // Show error message
-                document.getElementById('email-error').style.display = 'block';
-                event.preventDefault(); // Prevent form submission
-                return;
-            }
-
-            var xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    var percentComplete = (e.loaded / e.total) * 100;
-                    progress.style.width = percentComplete + '%';
-                }
-            });
-            xhr.upload.addEventListener('load', function(e) {
-                // File upload completed, show success popup
-                showPopup("File Uploaded Successfully for Analysis", false);
-                // Simulate sending email (1.5s delay)
-                setTimeout(function() {
-                    showPopup("Successful!", false);
-                }, 2500); // Show the "Email Sent Successfully" popup after 2.5 seconds
-            });
-            xhr.open('POST', '/upload', true);
-            xhr.setRequestHeader('Content-Type', 'multipart/form-data');
-            xhr.send(new FormData(event.target));
-
-            // Function to show a popup message with auto-close functionality
-            function showPopup(message, isError) {
-                var popup = document.getElementById('popup');
-                popup.innerText = message;
-                if (isError) {
-                    popup.classList.add('error');
-                } else {
-                    popup.classList.add('success');
-                }
-                popup.style.display = 'block';
-                setTimeout(function() {
-                    popup.style.display = 'none';
-                }, 1500); // Close the popup after 1.5 seconds
-            }
+        document.getElementById('fileLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('file').click();
         });
 
         document.getElementById('file').addEventListener('change', function() {
-            var maxSize = 4 * 1024 * 1024;
+            var maxSize = 4 * 1024 * 1024; // 4MB
             if (this.files[0].size > maxSize) {
                 alert('File is too large, please select a smaller file.');
                 this.value = '';
+            } else {
+                var fileName = this.files[0].name;
+                document.getElementById('fileLabel').innerHTML = 'File to be reviewed: ' + fileName;
             }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            // Disable submit button and change color to grey
+            var submitButton = document.getElementById('submitButton');
+            submitButton.disabled = true;
+            submitButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            submitButton.classList.add('bg-gray-400', 'cursor-not-allowed');
+
+            var resetButton = document.getElementById('resetButton');
+            resetButton.disabled = false;
+
+            var formData = new FormData(this);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    var percentComplete = (e.loaded / e.total) * 100;
+                    var progress = document.getElementById('progress');
+                    var progressBar = document.getElementById('progress-bar');
+                    progressBar.style.display = 'block';
+                    progress.style.width = percentComplete + '%';
+                }
+            });
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById('successMessage').classList.remove('hidden');
+                } else {
+                    alert('An error occurred during the upload. Please try again.');
+                }
+            };
+
+            xhr.onerror = function() {
+                alert('An error occurred during the upload. Please try again.');
+            };
+
+            xhr.send(formData);
+        });
+
+        document.getElementById('resetButton').addEventListener('click', function() {
+            document.getElementById('uploadForm').reset();
+            document.getElementById('fileLabel').innerHTML = '<a href="#" id="fileLink" class="text-blue-600 hover:underline">Select the .c File</a><br>to be Reviewed<br>';
+            document.getElementById('successMessage').classList.add('hidden');
+            var submitButton = document.getElementById('submitButton');
+            submitButton.disabled = false;
+            submitButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+            submitButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            var resetButton = document.getElementById('resetButton');
+            resetButton.disabled = false;
+
+            // Reattach the event listener for fileLink
+            document.getElementById('fileLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                document.getElementById('file').click();
+            });
         });
     </script>
 </body>

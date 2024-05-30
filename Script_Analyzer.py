@@ -110,9 +110,9 @@ class ScriptAnalyzer:
     def run_analysis(self):
         try:
             # Print start of script analysis
-            print("Starting Script Analysis.")
+            print(f"Starting Script Analysis of {self.script_path.stem}.")
             # Creating Log with Analysis in Log Directory
-            logging.info("Starting Script Analysis.")
+            logging.info(f"Starting Script Analysis of {self.script_path.stem}.")
             
             # Check if the file is a header file or a source file
             file_extension = self.script_path.suffix.lower()
@@ -224,9 +224,9 @@ class ScriptAnalyzer:
                     logging.error(f"Error during Address Data-Type check: {str(e)}")
 
             # Print summary of the analysis results
-            print("Script Analysis completed.")
+            print(f"Script Analysis of {self.script_path.stem} Completed.")
             # Creating Log with Analysis in Log Directory
-            logging.info("Script Analysis completed.")
+            logging.info(f"Script Analysis of {self.script_path.stem} Completed.")
 
             # Add summary table to log
             self.add_summary_to_log()
@@ -236,7 +236,7 @@ class ScriptAnalyzer:
             sender_password = self.sender_password
             recipient_email = self.recipient_email
             attachment_path = self.log_file
-            send_email(sender_email, sender_password, recipient_email, attachment_path, self.counts)
+            send_email(sender_email, sender_password, recipient_email, attachment_path, self.counts, self.script_path.stem)
 
         except Exception as e:
             logging.error(f"Error during analysis: {str(e)}")
@@ -1036,19 +1036,23 @@ class ScriptAnalyzer:
         except Exception as e:
             logging.error(f"Error during address print format check: {str(e)}")
 
-def send_email(sender_email, sender_password, recipient_email, attachment_path, counts):
+def send_email(sender_email, sender_password, recipient_email, attachment_path, counts, script_name):
     # Create a multipart message
     message = MIMEMultipart()
     message['From'] = sender_email
     message['To'] = recipient_email
+    recipient_user = recipient_email.split('@')[0]
+    recipient_user = recipient_user.capitalize()
 
     # Get the current date and format it as desired
     current_date = datetime.now().strftime('%d-%m-%Y')
-    subject = f"Script Analysis Log - {current_date}"
+    subject = f"Script Analysis Log - {script_name} - {current_date}"
     message['Subject'] = subject
 
     # Add body to email
-    body = "Please find attached the log file for the script analysis.<br><br>"
+    body = body = f"Hello {recipient_user},<br><br>"
+    body += "Please find attached the log file for the script analysis.<br>"
+    body += "<b><font size='4.5' color='#000000'>File Type: </font></b> .c File<br><br>"
     body += "<u><b><font size='4.5' color='#000000'>Summary:</font></b></u><br><br>"
 
     # Create a table for counts with added CSS for better styling
@@ -1086,7 +1090,7 @@ def send_email(sender_email, sender_password, recipient_email, attachment_path, 
     body += table
 
     # Add a couple of line breaks and the desired text
-    body += "<br><br>Please Refer to the Attached Log for the detailed Analysis<br><br>Regards<br>"
+    body += "<br><br>Please Refer to the Attached Log for the detailed Analysis<br><br>Regards<br>ScriptAnalyzer-QA<br>"
     
     message.attach(MIMEText(body, 'html'))
 

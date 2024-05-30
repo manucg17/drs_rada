@@ -1,7 +1,7 @@
 import os
 import shutil
-import logging 
-from flask import Flask, render_template, request, redirect, url_for, flash
+import logging
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.utils import secure_filename
 from Script_Analyzer import ScriptAnalyzer
 from encryption_utils import encrypt_data, decrypt_data, generate_key, load_key
@@ -47,12 +47,10 @@ def allowed_file(filename):
 def upload_file():
     recipient_email = request.form.get('recipient_email')  # Retrieve recipient email from the form
     if 'file' not in request.files:
-        flash('No file part')
-        return redirect(request.url)
+        return jsonify({'message': 'No file part', 'isError': True}), 400
     file = request.files['file']
     if file.filename == '':
-        flash('No selected file')
-        return redirect(request.url)
+        return jsonify({'message': 'No selected file', 'isError': True}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         # Save the uploaded file to the uploads folder
@@ -68,16 +66,13 @@ def upload_file():
                 # Remove all handlers from the logger
                 for handler in logging.root.handlers[:]:
                     logging.root.removeHandler(handler)
-                flash('File successfully uploaded and analyzed. Email sent successfully')
+                return jsonify({'message': 'File successfully uploaded and analyzed. Email sent successfully', 'isError': False}), 200
             except Exception as e:
-                flash(f'Error analyzing the C++ script and sending email: {str(e)}', 'error')
+                return jsonify({'message': f'Error analyzing the C++ script and sending email: {str(e)}', 'isError': True}), 500
         else:
-            flash('File Types Allowed are .c, .h', 'error')
-            
-        return redirect(url_for('index'))
+            return jsonify({'message': 'File Types Allowed are .c, .h', 'isError': True}), 400
     else:
-        flash('Allowed file types are .c, .h', 'error')
-        return redirect(request.url)
+        return jsonify({'message': 'Allowed file types are .c, .h', 'isError': True}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug=True)
