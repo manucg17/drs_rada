@@ -43,9 +43,6 @@
                         Reset
                     </button>
                 </div>
-                <div class="progress-bar" id="progress-bar">
-                    <div class="progress" id="progress"></div>
-                </div>
                 <div id="successMessage" class="text-center mt-4 text-green-600 font-semibold hidden">File uploaded successfully. Logs will be sent to the recipient.</div>
             </form>
         </div>
@@ -55,46 +52,6 @@
         .has-mask {
             position: absolute;
             clip: rect(10px, 150px, 130px, 10px);
-        }
-
-        .progress-bar {
-            width: 100%;
-            background-color: #ddd;
-            border-radius: 5px;
-            margin-top: 10px;
-            overflow: hidden;
-            display: none; /* Initially hide the progress bar */
-        }
-
-        .progress {
-            width: 0%;
-            height: 20px;
-            background-color: #f7dc6f; /* Yellow progress color */
-            transition: width 0.5s; /* Smooth transition for width change */
-        }
-
-        .popup {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 20px;
-            background-color: #fff;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            z-index: 9999;
-            display: none;
-        }
-
-        .success {
-            color: green;
-            font-weight: bold;
-        }
-
-        .error {
-            color: red;
-            font-weight: bold;
         }
     </style>
 
@@ -130,16 +87,6 @@
             var formData = new FormData(this);
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload', true);
-
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    var percentComplete = (e.loaded / e.total) * 100;
-                    var progress = document.getElementById('progress');
-                    var progressBar = document.getElementById('progress-bar');
-                    progressBar.style.display = 'block';
-                    progress.style.width = percentComplete + '%';
-                }
-            });
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
