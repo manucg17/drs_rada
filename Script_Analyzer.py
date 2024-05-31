@@ -21,7 +21,7 @@ SMTP_PORT = 587
 SEQUENCE_LENGTH = 3  # Minimum number of lines in a sequence to consider it for refactoring
 REPETITION_THRESHOLD = 3  # Determine the threshold for suggesting refactoring as a function
 ALLOWED_CHAR_COUNT = 85
-OPERATORS = ['->', '<<', '>>', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '&=', '|=', '^=', '+', '-', '*', '/', '%', '=', '<', '>', '&', '|', ',', '?']
+OPERATORS = ['->', '<<', '>>', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '&=', '|=', '^=', '+', '-', '*', '/', '%', '=', '<', '>', '|', ',', '?']
 FORMAT_SPECIFIERS = ["%c", "%d", "%e", "%E", "%f", "%g", "%G", "%i", "%ld", "%li", "%lf", "%Lf", "%lu", "%lli", "%lld", "%llu", "%o", "%p", "%s", "%u", "%x", "%X", "%n", "%%"]
 EXPORT_FUNCTIONS = ["STATUS hmc7043IfInit(", "STATUS hmc7043InitDev(", 
                     "STATUS hmc7043OutChEnDis(", "STATUS hmc7043ChDoSlip(",
@@ -741,11 +741,22 @@ class ScriptAnalyzer:
                 operators_found = operator_pattern.findall(line)
                 for operator in operators_found:
                     # Check if there are spaces around the operator
-                    spaced_operator_pattern = r'(?<!\S)' + re.escape(operator) + r'(?!\S)'
-                    if not re.search(spaced_operator_pattern, line):
-                        if line_number not in lines_with_errors:
-                            lines_with_errors[line_number] = set()
-                        lines_with_errors[line_number].add(operator)
+                    if operator == ',':
+                        if re.search(r'\s,', line) or not re.search(r',\s|,$', line):
+                            if line_number not in lines_with_errors:
+                                lines_with_errors[line_number] = set()
+                            lines_with_errors[line_number].add(operator)
+                    elif operator == '->':
+                        if re.search(r'\s->|->\s', line):
+                            if line_number not in lines_with_errors:
+                                lines_with_errors[line_number] = set()
+                            lines_with_errors[line_number].add(operator)
+                    else:
+                        spaced_operator_pattern = r'(?<!\S)' + re.escape(operator) + r'(?!\S)'
+                        if not re.search(spaced_operator_pattern, line):
+                            if line_number not in lines_with_errors:
+                                lines_with_errors[line_number] = set()
+                            lines_with_errors[line_number].add(operator)
 
             # Log operator spacing errors
             for line_number, operators in sorted(lines_with_errors.items()):
@@ -968,43 +979,53 @@ class ScriptAnalyzer:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
             logging.error(f"Error during unsigned logic check: {str(e)}")
-            
+
     def check_unsigned_variables(self):
         try:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
-
+    
             # Regular expression to match variable declarations
-            declaration_pattern = r'\b(?:' + '|'.join(UI_VARIABLES) + r')\s+(\w+)\b'
-            variable_declarations = re.findall(declaration_pattern, '\n'.join(lines))
-
+            declaration_pattern = re.compile(r'\b(?:' + '|'.join(UI_VARIABLES) + r')\s+(\w+)\b')
+            variable_declarations = declaration_pattern.findall('\n'.join(lines))
+    
             # Regular expression to match sysLog statements
-            syslog_pattern = r'sysLog\("(.*?)(%d|%i)(.*?)",\s*(.*?)\)'        
-
+            syslog_pattern = re.compile(r'sysLog\("(.*?)",\s*(.*?)\)')
+    
             error_count = 0  # Initialize error count
-
+    
             for line_number, line in enumerate(lines, start=1):
                 # Check for nBytes variable declaration
-                nbytes_pattern = r'\b(' + '|'.join(UI_VARIABLES) + r')\s+nBytes\b'
-                nbytes_match = re.search(nbytes_pattern, line)
+                nbytes_pattern = re.compile(r'\b(' + '|'.join(UI_VARIABLES) + r')\s+nBytes\b')
+                nbytes_match = nbytes_pattern.search(line)
                 if nbytes_match:
                     data_type = nbytes_match.group(1)
                     if data_type != 'unsigned':
                         logging.info(f"Unsigned Variable: Please replace '{data_type}' with 'unsigned' to declare 'nBytes': Line {line_number}")
                         error_count += 1
                         self.counts['unsigned_print_check'] += 1
-
-                for match in re.finditer(syslog_pattern, line):
-                    format_specifier = match.group(2)
-                    arguments = match.group(4).split(',')  # Split arguments in sysLog
-                    for arg in arguments:
-                        if arg.strip() in variable_declarations and format_specifier != '%u':
-                            logging.info(f"Unsigned Variable: Incorrect Format used to print unsigned variable {arg.strip()}: Line {line_number}: Please Use %u instead.")
-                            error_count += 1  # Increment error count
+    
+                # Check sysLog statements
+                for match in syslog_pattern.finditer(line):
+                    format_string = match.group(1)
+                    arguments = match.group(2).split(',')
+                    
+                    # Extract format specifiers from the format string
+                    format_specifiers = re.findall(r'%[diu]', format_string)
+    
+                    if len(format_specifiers) != len(arguments):
+                        logging.warning(f"Format specifiers and arguments count mismatch at line {line_number}")
+                        continue
+    
+                    for specifier, arg in zip(format_specifiers, arguments):
+                        arg = arg.strip()
+                        if arg in variable_declarations and specifier not in ['%u']:
+                            logging.info(f"Unsigned Variable: Please use %u to print unsigned variable {arg}: Line {line_number}.")
+                            error_count += 1
                             self.counts['unsigned_print_check'] += 1
-
+    
             logging.info(f"Unsigned Variable: Unsigned variables check completed - Error Count: {error_count}")
-
+    
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
