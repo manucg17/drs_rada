@@ -749,8 +749,8 @@ class ScriptAnalyzer:
 
             # Log operator spacing errors
             for line_number, operators in sorted(lines_with_errors.items()):
-                operator_list = ', '.join(operators)
-                logging.info(f"Operator Error: Improper spacing for operators {operator_list} in line {line_number}.")
+                operator_list = ' and '.join(operators)
+                logging.info(f"Operator Error: Improper spacing for operators: {operator_list} : Line {line_number}.")
                 error_count += 1
 
             # Log summary of errors
