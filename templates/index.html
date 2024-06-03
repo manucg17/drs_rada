@@ -56,13 +56,12 @@
             clip: rect(10px, 150px, 130px, 10px);
         }
     </style>
-
     <script>
         document.getElementById('fileLink').addEventListener('click', function(e) {
             e.preventDefault();
             document.getElementById('file').click();
         });
-
+    
         document.getElementById('file').addEventListener('change', function() {
             var maxSize = 4 * 1024 * 1024; // 4MB
             if (this.files[0].size > maxSize) {
@@ -73,23 +72,46 @@
                 document.getElementById('fileLabel').innerHTML = 'File to be Reviewed: ' + fileName;
             }
         });
-
+    
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            // Check email domain
+            var email = document.getElementById('recipient_email').value;
+            if (!email.toLowerCase().endsWith('@thinkpalm.com')) {
+                // Show error message
+                document.getElementById('email-error').style.display = 'block';
+                event.preventDefault(); // Prevent form submission
+                return;
+            } else {
+                document.getElementById('email-error').style.display = 'none';
+            }
+    
+            // Check file extension
+            var fileInput = document.getElementById('file');
+            var fileName = fileInput.value;
+            var allowedExtensions = ['.c', '.h'];
+            var fileExtension = fileName.split('.').pop().toLowerCase();
+            if (!allowedExtensions.includes('.' + fileExtension)) {
+                alert("Invalid file format.\nPlease Reset Page and Upload a .c or .h file.");
+                fileInput.value = '';
+                event.preventDefault();
+                return;
+            }
+    
             event.preventDefault();
-
+    
             // Disable submit button and change color to grey
             var submitButton = document.getElementById('submitButton');
             submitButton.disabled = true;
             submitButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
             submitButton.classList.add('bg-gray-400', 'cursor-not-allowed');
-
+    
             var resetButton = document.getElementById('resetButton');
             resetButton.disabled = false;
-
+    
             var formData = new FormData(this);
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload', true);
-
+    
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     document.getElementById('successMessage').classList.remove('hidden');
@@ -97,31 +119,33 @@
                     alert('An error occurred during the upload. Please try again.');
                 }
             };
-
+    
             xhr.onerror = function() {
                 alert('An error occurred during the upload. Please try again.');
             };
-
+    
             xhr.send(formData);
         });
-
+    
         document.getElementById('resetButton').addEventListener('click', function() {
+            // Reset form and hide error message
             document.getElementById('uploadForm').reset();
             document.getElementById('fileLabel').innerHTML = '<a href="#" id="fileLink" class="text-blue-600 hover:underline">Select the .c File</a>';
             document.getElementById('successMessage').classList.add('hidden');
+            document.getElementById('email-error').style.display = 'none';
             var submitButton = document.getElementById('submitButton');
             submitButton.disabled = false;
             submitButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
             submitButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
             var resetButton = document.getElementById('resetButton');
             resetButton.disabled = false;
-
+    
             // Reattach the event listener for fileLink
             document.getElementById('fileLink').addEventListener('click', function(e) {
                 e.preventDefault();
                 document.getElementById('file').click();
             });
         });
-    </script>
+    </script>    
 </body>
 </html>

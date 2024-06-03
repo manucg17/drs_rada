@@ -302,7 +302,7 @@ class ScriptAnalyzer:
                     type_name = match.strip()
                     if self.is_valid_type_name(type_name):
                         self.RESERVED_TYPES.add(type_name)
-                        logging.info(f"Added new reserved type: {type_name}")
+                        # logging.info(f"Added new reserved type: {type_name}")
 
             # Check for function declarations
             func_matches = func_pattern.findall(content)
@@ -310,7 +310,7 @@ class ScriptAnalyzer:
                 return_type, func_name, params = match
                 if self.is_valid_type_name(return_type):
                     self.RESERVED_TYPES.add(return_type)
-                    logging.info(f"Added new reserved return type from function: {return_type}")
+                    # logging.info(f"Added new reserved return type from function: {return_type}")
 
                 param_list = params.split(',')
                 for param in param_list:
@@ -319,7 +319,7 @@ class ScriptAnalyzer:
                         type_name = param_parts[0]
                         if self.is_valid_type_name(type_name):
                             self.RESERVED_TYPES.add(type_name)
-                            logging.info(f"Added new reserved type from function parameter: {type_name}")
+                            # logging.info(f"Added new reserved type from function parameter: {type_name}")
 
             # Find and log the newly added types
             new_reserved_types = self.RESERVED_TYPES - initial_reserved_types
@@ -393,7 +393,21 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
+            in_multiline_comment = False
             for line_number, line in enumerate(lines, start=1):
+                stripped_line = line.strip()
+
+                # Check if the line starts or ends a multi-line comment
+                if "/*" in stripped_line:
+                    in_multiline_comment = True
+                if "*/" in stripped_line:
+                    in_multiline_comment = False
+                    continue
+
+                # Skip checking if the line is within a comment or starts with //
+                if in_multiline_comment or stripped_line.startswith("//"):
+                    continue
+
                 line_length = len(line)
                 if line_length > ALLOWED_CHAR_COUNT:
                     logging.info(f"Line Length Limit: Exceeded {ALLOWED_CHAR_COUNT} Characters: Line {line_number} has {line_length} characters.")
@@ -530,47 +544,64 @@ class ScriptAnalyzer:
 
         try:
             with open(self.script_path, 'r') as file:
-                for line_number, line in enumerate(file, start=1):
+                lines = file.readlines()
+                for line_number, line in enumerate(lines, start=1):
                     line = line.strip()
 
                     if not line:
                         empty_lines_count += 1
                         continue
 
-                    if empty_lines_count == 4 and line.startswith('/*******************************************************************************'):
+                    # Check for comment block
+                    if line.startswith('/*******************************************************************************'):
+                        # Check if the next line contains '* - name:'
+                        if line_number < len(lines) and lines[line_number].strip().startswith('* - name:'):
+                            if empty_lines_count != 4:
+                                logging.info(f"Expected exactly 4 empty lines before the comment block at line {line_number}, found {empty_lines_count}.")
+                                self.counts['spacing_between_routines_check'] += 1
                         empty_lines_count = 0
                         comment_block = True
                         continue
 
+                    # End of comment block
                     if comment_block and line.endswith('*******************************************************************************/'):
                         empty_lines_count = 4
                         comment_block = False
                         continue
 
+                    # Check for 'int main()' function
                     if empty_lines_count == 4 and line.startswith('int main()'):
-                        found_main = True
                         break
 
+                    # Check for function names
                     if not comment_block and empty_lines_count == 4 and line.startswith('* - name:'):
-                        logging.info(f"Expected 4 empty lines before '{line}' at line {line_number}.")
+                        logging.info(f"Expected exactly 4 empty lines before '{line}' at line {line_number}, found {empty_lines_count}.")
                         self.counts['spacing_between_routines_check'] += 1
                         empty_lines_count = 0
                         continue
 
+                    # Check for end of function block
                     if not comment_block and empty_lines_count == 4 and line.endswith('}'):
-                        logging.info(f"Expected 4 empty lines after function block at line {line_number}.")
+                        logging.info(f"Expected exactly 4 empty lines after function block at line {line_number}, found {empty_lines_count}.")
+                        self.counts['spacing_between_routines_check'] += 1
+                        empty_lines_count = 0
+                        continue
+
+                    # If more than 4 empty lines, log an error
+                    if empty_lines_count > 4:
+                        logging.info(f"More than 4 empty lines found at line {line_number}, found {empty_lines_count}.")
                         self.counts['spacing_between_routines_check'] += 1
                         empty_lines_count = 0
                         continue
 
                     empty_lines_count = 0
 
-            logging.info(f"Spacing between routines check completed - Error Count: {self.counts['spacing_between_routines_check']}")
-
         except FileNotFoundError:
             logging.error(f"File not found: {self.script_path}")
         except Exception as e:
             logging.error(f"Error during spacing between routines check: {str(e)}")
+
+        logging.info(f"Spacing between routines check completed - Error Count: {self.counts['spacing_between_routines_check']}")
 
     def check_brace_placement(self):
         try:
@@ -680,7 +711,7 @@ class ScriptAnalyzer:
             with open(self.script_path, "r") as script_file:
                 lines = script_file.readlines()
 
-            # Compile patterns
+            # Compile patterns 
             single_line_comment_pattern = re.compile(r'//.*')
             multi_line_comment_pattern = re.compile(r'/\*.*?\*/')
             multi_line_comment_start = re.compile(r'/\*')
@@ -921,35 +952,83 @@ class ScriptAnalyzer:
         except Exception as e:
             logging.error(f"Error during consistency check: {str(e)}")
 
-    def check_excess_whitespace(self):
-        try:
-            with open(self.script_path, "r") as script_file:
-                lines = script_file.readlines()
+    class WhitespaceChecker:
+        def __init__(self, script_path):
+            self.script_path = script_path
+            self.counts = {'excess_whitespace_check': 0}
 
-            in_multiline_comment = False
-            for line_number, line in enumerate(lines, start=1):
-                # Check if the line starts a multi-line comment
-                if "/*" in line:
-                    in_multiline_comment = True
+        def check_excess_whitespace(self):
+            try:
+                with open(self.script_path, "r") as script_file:
+                    lines = script_file.readlines()
 
-                # Skip checking if the line is within a comment or within double quotes
-                if in_multiline_comment or line.startswith("//"):
-                    # Check if the line ends a multi-line comment
-                    if "*/" in line:
+                control_structures = ["if", "else if", "else", "switch", "for", "while", "do", "case", "default"]
+                function_patterns = ["EXPORT STATUS", "LOCAL STATUS", "sysLog"]
+
+                in_multiline_comment = False
+                prev_equal_pos = prev_colon_pos = None
+                for line_number, line in enumerate(lines, start=1):
+                    stripped_line = line.rstrip()  # remove trailing whitespace
+
+                    # Check if the line starts or ends a multi-line comment
+                    if "/*" in stripped_line:
+                        in_multiline_comment = True
+                    if "*/" in stripped_line:
                         in_multiline_comment = False
-                    continue
+                        continue
 
-                matches = re.findall(r'(\S+)\s{2,}(\S+)', line)
-                for match in matches:
-                    logging.info(f"Whitespace Check: Excess whitespace detected between '{match[0]}' and '{match[1]}': Line {line_number}.")
-                    self.counts['excess_whitespace_check'] += 1
+                    # Skip checking if the line is within a comment or starts with //
+                    if in_multiline_comment or stripped_line.startswith("//"):
+                        continue
 
-            logging.info(f"Whitespace Check: Excess whitespace check completed - Error Count: {self.counts['excess_whitespace_check']}")
+                    # Skip lines starting with specific control structures or function patterns
+                    if any(stripped_line.startswith(cs) for cs in control_structures) or \
+                    any(stripped_line.startswith(fp) for fp in function_patterns):
+                        continue
 
-        except FileNotFoundError:
-            logging.error(f"File not found: {self.script_path}")
-        except Exception as e:
-            logging.error(f"Error during excess whitespace check: {str(e)}")
+                    # Determine the positions of '=', ':', and ';'
+                    equal_pos = stripped_line.find('=')
+                    colon_pos = stripped_line.find(':')
+                    semicolon_pos = stripped_line.find(';')
+
+                    # Skip lines starting with #define
+                    if stripped_line.startswith("#define"):
+                        prev_equal_pos = prev_colon_pos = None
+                        continue
+
+                    # Check alignment of '=' and ':' in consecutive lines
+                    if prev_equal_pos is not None and equal_pos != -1 and semicolon_pos != -1:
+                        if equal_pos != prev_equal_pos or \
+                        not (stripped_line[equal_pos-1] == ' ' and stripped_line[equal_pos+1] == ' '):
+                            logging.info(f"Alignment Issue: Misalignment detected at Line {line_number}.")
+                        continue
+
+                    if prev_colon_pos is not None and colon_pos != -1 and semicolon_pos != -1:
+                        if colon_pos != prev_colon_pos or \
+                        not (stripped_line[colon_pos-1] == ' ' and stripped_line[colon_pos+1] == ' '):
+                            logging.info(f"Alignment Issue: Misalignment detected at Line {line_number}.")
+                        continue
+
+                    # Update the positions for the next line if current line contains '=' or ':'
+                    prev_equal_pos = equal_pos if equal_pos != -1 else prev_equal_pos
+                    prev_colon_pos = colon_pos if colon_pos != -1 else prev_colon_pos
+
+                    # Find instances of excess whitespace (more than one space) between non-whitespace characters
+                    matches = re.findall(r'(\S+)\s{2,}(\S+)', line)
+                    for match in matches:
+                        logging.info(f"Whitespace Check: Excess whitespace detected between '{match[0]}' and '{match[1]}': Line {line_number}.")
+                        self.counts['excess_whitespace_check'] += 1
+
+                    # Check for trailing spaces
+                    if line.endswith(' ') or line.endswith('\t'):
+                        logging.info(f"Trailing Whitespace Issue: Trailing whitespace detected at Line {line_number}.")
+
+                logging.info(f"Whitespace Check: Excess whitespace check completed - Error Count: {self.counts['excess_whitespace_check']}")
+
+            except FileNotFoundError:
+                logging.error(f"File not found: {self.script_path}")
+            except Exception as e:
+                logging.error(f"Error during excess whitespace check: {str(e)}")
 
     def check_unsigned_logic(self):
         try:
