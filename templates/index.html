@@ -36,6 +36,7 @@
                             <input id="file" name="file" type="file" class="hidden" accept=".c,.h" required>
                         </label>
                     </div>
+                    <div id="file-error" class="text-red-500 text-sm hidden">Please select a file to be reviewed.</div>
                 </div>
                 <div class="flex justify-between">
                     <button type="submit" id="submitButton" class="my-5 w-1/2 flex justify-center bg-blue-500 text-gray-100 p-4 rounded-full tracking-wide font-semibold focus:outline-none focus:shadow-outline hover:bg-blue-600 shadow-lg cursor-pointer transition ease-in duration-300">
@@ -61,7 +62,7 @@
             e.preventDefault();
             document.getElementById('file').click();
         });
-    
+
         document.getElementById('file').addEventListener('change', function() {
             var maxSize = 4 * 1024 * 1024; // 4MB
             if (this.files[0].size > maxSize) {
@@ -70,9 +71,10 @@
             } else {
                 var fileName = this.files[0].name;
                 document.getElementById('fileLabel').innerHTML = 'File to be Reviewed: ' + fileName;
+                document.getElementById('file-error').style.display = 'none'; // Hide file error if a file is selected
             }
         });
-    
+
         document.getElementById('uploadForm').addEventListener('submit', function(event) {
             // Check email domain
             var email = document.getElementById('recipient_email').value;
@@ -84,9 +86,17 @@
             } else {
                 document.getElementById('email-error').style.display = 'none';
             }
-    
-            // Check file extension
+
+            // Check if file is selected
             var fileInput = document.getElementById('file');
+            if (!fileInput.value) {
+                document.getElementById('file-error').style.display = 'block'; // Show file error if no file is selected
+                document.getElementById('file-error').textContent = 'Please Select the required File that needs to be Reviewed.'; // Update error message
+                event.preventDefault();
+                return;
+            }
+
+            // Check file extension
             var fileName = fileInput.value;
             var allowedExtensions = ['.c', '.h'];
             var fileExtension = fileName.split('.').pop().toLowerCase();
@@ -96,22 +106,22 @@
                 event.preventDefault();
                 return;
             }
-    
+
             event.preventDefault();
-    
+
             // Disable submit button and change color to grey
             var submitButton = document.getElementById('submitButton');
             submitButton.disabled = true;
             submitButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
             submitButton.classList.add('bg-gray-400', 'cursor-not-allowed');
-    
+
             var resetButton = document.getElementById('resetButton');
             resetButton.disabled = false;
-    
+
             var formData = new FormData(this);
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload', true);
-    
+
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     document.getElementById('successMessage').classList.remove('hidden');
@@ -119,33 +129,34 @@
                     alert('An error occurred during the upload. Please try again.');
                 }
             };
-    
+
             xhr.onerror = function() {
                 alert('An error occurred during the upload. Please try again.');
             };
-    
+
             xhr.send(formData);
         });
-    
+
         document.getElementById('resetButton').addEventListener('click', function() {
-            // Reset form and hide error message
+            // Reset form and hide error messages
             document.getElementById('uploadForm').reset();
             document.getElementById('fileLabel').innerHTML = '<a href="#" id="fileLink" class="text-blue-600 hover:underline">Select the .c File</a>';
             document.getElementById('successMessage').classList.add('hidden');
             document.getElementById('email-error').style.display = 'none';
+            document.getElementById('file-error').style.display = 'none';
             var submitButton = document.getElementById('submitButton');
             submitButton.disabled = false;
             submitButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
             submitButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
             var resetButton = document.getElementById('resetButton');
             resetButton.disabled = false;
-    
+
             // Reattach the event listener for fileLink
             document.getElementById('fileLink').addEventListener('click', function(e) {
                 e.preventDefault();
                 document.getElementById('file').click();
             });
         });
-    </script>    
+    </script>
 </body>
 </html>
