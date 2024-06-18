@@ -21,7 +21,7 @@ SMTP_PORT = 587
 SEQUENCE_LENGTH = 3  # Minimum number of lines in a sequence to consider it for refactoring
 REPETITION_THRESHOLD = 3  # Determine the threshold for suggesting refactoring as a function
 ALLOWED_CHAR_COUNT = 85
-OPERATORS = ['->', '<<', '>>', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '&=', '|=', '^=', '+', '-', '*', '/', '%', '=', '<', '>', '|', ',', '?']
+OPERATORS = ['->', '<<', '>>', '>>=', '==', '!=', '<=', '>=', '&&', '||', '+=', '-=', '*=', '&=', '|=', '^=', '+', '-', '*', '/', '=', '<', '>', '|', ',', '?']
 FORMAT_SPECIFIERS = ["%c", "%d", "%e", "%E", "%f", "%g", "%G", "%i", "%ld", "%li", "%lf", "%Lf", "%lu", "%lli", "%lld", "%llu", "%o", "%p", "%s", "%u", "%x", "%X", "%n", "%%"]
 EXPORT_FUNCTIONS = ["STATUS hmc7043IfInit(", "STATUS hmc7043InitDev(", 
                     "STATUS hmc7043OutChEnDis(", "STATUS hmc7043ChDoSlip(",
@@ -717,14 +717,14 @@ class ScriptAnalyzer:
             multi_line_comment_start = re.compile(r'/\*')
             multi_line_comment_end = re.compile(r'\*/')
             preprocessor_directive_pattern = re.compile(r'^\s*#(include|pragma)')
-            operator_pattern = re.compile(r'({0})'.format('|'.join(re.escape(op) for op in OPERATORS if op not in ["++", "--"])))
+            operator_pattern = re.compile(r'({0})'.format('|'.join(re.escape(op) for op in OPERATORS if op not in ["++", "--", "%."])))
             format_specifier_pattern = re.compile('|'.join(re.escape(fs) for fs in FORMAT_SPECIFIERS))
             correct_pointer_pattern = re.compile(r'\*p[A-Z]')  # Pattern to match correct pointers
             incorrect_pointer_pattern = re.compile(r'\*[a-oq-zA-Z]')  # Pattern to match incorrect pointers
 
             # Pattern to match pointer declarations
             pointer_declaration_pattern = re.compile(r'\*\w+')
-
+            typecasting_pattern = re.compile(r'\(\s*\w+\s*\*\s*\)')
             error_count = 0
             pointer_error_count = 0
             in_multi_line_comment = False
@@ -765,29 +765,43 @@ class ScriptAnalyzer:
                     continue
 
                 # Skip pointer declarations
-                if pointer_declaration_pattern.search(line):
+                if pointer_declaration_pattern.search(line) or typecasting_pattern.search(line):
                     continue
 
+                # Special handling for `>>=` operator
+                if '>>=' in line:
+                    if not re.search(r'\s>>=\s', line):
+                        if line_number not in lines_with_errors:
+                            lines_with_errors[line_number] = set()
+                        lines_with_errors[line_number].add('>>=')
+                    continue
                 # Check for operator spacing errors
                 operators_found = operator_pattern.findall(line)
-                for operator in operators_found:
-                    # Check if there are spaces around the operator
-                    if operator == ',':
-                        if re.search(r'\s,', line) or not re.search(r',\s|,$', line):
-                            if line_number not in lines_with_errors:
-                                lines_with_errors[line_number] = set()
-                            lines_with_errors[line_number].add(operator)
-                    elif operator == '->':
-                        if re.search(r'\s->|->\s', line):
-                            if line_number not in lines_with_errors:
-                                lines_with_errors[line_number] = set()
-                            lines_with_errors[line_number].add(operator)
-                    else:
-                        spaced_operator_pattern = r'(?<!\S)' + re.escape(operator) + r'(?!\S)'
+            
+            for operator in operators_found:
+                if operator == ',':
+                    if re.search(r'\s,', line) or not re.search(r',\s|,$', line):
+                        if line_number not in lines_with_errors:
+                            lines_with_errors[line_number] = set()
+                        lines_with_errors[line_number].add(operator)
+                elif operator == '->':
+                    if re.search(r'\s->|->\s', line):
+                        if line_number not in lines_with_errors:
+                            lines_with_errors[line_number] = set()
+                        lines_with_errors[line_number].add(operator)
+                elif operator == '*':
+                    if not (pointer_declaration_pattern.search(line) or typecasting_pattern.search(line)):
+                        spaced_operator_pattern = r'(?<!\S)\*(?!\S)'
                         if not re.search(spaced_operator_pattern, line):
                             if line_number not in lines_with_errors:
                                 lines_with_errors[line_number] = set()
                             lines_with_errors[line_number].add(operator)
+                else:
+                    spaced_operator_pattern = r'(?<!\S)' + re.escape(operator) + r'(?!\S)'
+                    if not re.search(spaced_operator_pattern, line):
+                        if line_number not in lines_with_errors:
+                            lines_with_errors[line_number] = set()
+                        lines_with_errors[line_number].add(operator)
 
             # Log operator spacing errors
             for line_number, operators in sorted(lines_with_errors.items()):

@@ -50,7 +50,7 @@ unsigned int nBytes = 0 or greater
 -------------------------------------------------------------------------------------------------------------------
 
 20: Changed %d to %u when prnting nBytes
-
+unsigned nBytes
 #include <stdio.h>
 
 int main() {
