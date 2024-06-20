@@ -2,6 +2,15 @@
 <html>
 <head>
     <title>Script Analyzer</title>
+    <meta name="generator" content="Site Kit by Google 1.116.0"><link rel="Shortcut Icon" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/favicon.ico?06/20/24-05:23:13" type="image/x-icon">
+    <link rel="apple-touch-icon-precomposed" sizes="152x152" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-152x152.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-144x144.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="120x120" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-120x120.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-114x114.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="76x76" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-76x76.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-72x72.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" sizes="57x57" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon-57x57.png?06/20/24-05:23:13">
+    <link rel="apple-touch-icon-precomposed" href="https://www.drsrada.com/wp-content/themes/radatech/assets/images/favicon/apple-touch-icon.png?06/20/24-05:23:13">
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body>
@@ -11,7 +20,7 @@
         <div class="absolute top-0 left-0 p-4">
             <img src="https://www.drsrada.com/wp-content/themes/radatech/assets/images/drs-rada-logo.svg" alt="DRS Logo" class="h-8">
         </div>
-        <div class="sm:max-w-lg w-full p-10 rounded-xl z-10" style="background-color: rgba(229, 231, 235, 0.779);">
+        <div class="sm:max-w-lg w-full p-10 rounded-xl z-10" style="background-color: rgba(229, 231, 235, 0.75);">
             <div class="text-center">
                 <h2 class="mt-5 text-3xl font-bold text-gray-900">
                     Script Analyzer
@@ -20,12 +29,12 @@
             </div>
             <form class="mt-8 space-y-3" id="uploadForm">
                 <div class="grid grid-cols-1 space-y-2">
-                    <label class="text-sm font-bold text-gray-800 tracking-wide">Recipient Email Address:</label>
+                    <label class="text-sm font-bold text-gray-900 tracking-wide">Recipient Email Address:</label>
                     <input id="recipient_email" name="recipient_email" class="text-base p-2 border border-black border-2 bg-gray-300 rounded-lg focus:outline-none focus:border-indigo-500" type="email" placeholder="user-id@thinkpalm.com" required>
                     <div id="email-error" class="text-red-500 text-sm hidden">Invalid email domain. Please use user-id@thinkpalm.com.</div>
                 </div>
                 <div class="grid grid-cols-1 space-y-2">
-                    <label class="text-sm font-bold text-gray-800 tracking-wide">Attach File to be Reviewed:</label>
+                    <label class="text-sm font-bold text-gray-900 tracking-wide">Attach File to be Reviewed:</label>
                     <div class="flex items-center justify-center w-full">
                         <label class="flex flex-col items-center justify-center rounded-lg border-4 border-dashed w-full h-60 p-10 group text-center">
                             <div class="flex flex-col items-center justify-center h-full w-full text-center">
@@ -49,7 +58,7 @@
                         Reset
                     </button>
                 </div>
-                <div id="successMessage" class="text-center mt-4 text-green-600 font-semibold hidden">File uploaded successfully.<br>Logs will be sent to the recipient.</div>
+                <div id="successMessage" class="text-center mt-4 text-green-600 font-bold hidden">File uploaded successfully.<br>Logs will be sent to the recipient.</div>
             </form>
         </div>
     </div>
